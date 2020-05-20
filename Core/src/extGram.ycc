@@ -1,0 +1,5064 @@
+/******************************************************************************
+* Fichier: jvgram.y
+* Desc: grammaire en yacc pour compiler le langage Java.
+* Module: AkraLog : JavaKit.
+* Revision: 20 avril 1996 : REV 0 : Hugo DesRosiers : Creation.
+******************************************************************************/
+
+%{
+/* On met ici les declaration et les fichiers inclus */
+
+extern "C" {
+/* MSC-MOD:
+    Il faut ajouter dans le code genere par yacc les choses suivantes (a leurs positions respectives):
+    extern int yychar;
+    extern short yyerrflag;
+    YYSTYPE yylval, yyval;
+
+ int yylex();
+extern void yyerror(char *);
+*/
+ }
+
+#include <stdio.h>
+#include <stdlib.h>
+
+#include "jvtypes.h"
+#include "constants.h"
+#include "package.h"
+#include "compileObjects.h"
+#include "actions.h"
+#include "expressions.h"
+#include "variables.h"
+#include "identifiers.h"
+#include "typing.h"
+#include "outConstant.h"
+#include "lists.h"
+#if defined(PLZEN_LEVEL_3)
+#include "sqlActions.h"
+#include "sqlExpressions.h"
+#include "sqlClauses.h"
+#include "sqlConstants.h"
+#include "sqlIdentifier.h"
+#endif
+#include "compiler.h"
+
+
+extern int yylex();
+extern void yyerror(char *);
+
+extern JCCompiler *compiler;
+JCPackage *thePackage;
+int isInSubset= 0;
+
+extern "C" {
+// int isInSubset= 0;
+}
+
+#define YYDEBUG	1
+
+#if defined (_WIN32)
+#include <malloc.h>
+
+extern "C" {
+int yychar;
+YYSTYPE yylval;
+}
+
+
+#endif
+
+%}
+
+
+/**************************************************************
+* Keywords of the language, and other meta-characters.
+**************************************************************/
+
+%token ABSTRACT_KW
+%token ANDAND_KW
+%token ANDASSIGN_KW
+%token BOOLEAN_KW
+%token BREAK_KW
+%token BYTE_KW
+%token BYVALUE_KW
+%token CASE_KW
+%token CAST_KW
+%token CATCH_KW
+%token CHAR_KW
+%token CLASS_KW
+%token CONST_KW
+%token CONTINUE_KW
+%token DECR_KW
+%token DEFAULT_KW
+%token DIVIDEASSIGN_KW
+%token DOUBLE_KW
+%token DO_KW
+%token ELSE_KW
+%token EQ_KW
+%token EXTENDS_KW
+%token FINALLY_KW
+%token FINAL_KW
+%token FLOAT_KW
+%token FOR_KW
+%token FUTURE_KW
+%token GENERIC_KW
+%token GE_KW
+%token GOTO_KW
+%token ICR_KW
+%token IF_KW
+%token IMPLEMENTS_KW
+%token IMPORT_KW
+%token IDENTIFIER_KW
+%token INNER_KW
+%token INSTANCEOF_KW
+%token INTERFACE_KW
+%token INT_KW
+%token LE_KW
+%token LITERAL_BOOLEAN
+%token LITERAL_CHAR
+%token LITERAL_DOUBLE
+%token LITERAL_FLOAT
+%token LITERAL_INT
+%token LITERAL_LONG
+%token LITERAL_STRING
+%token LONG_KW
+%token LSASSIGN_KW
+%token LS_KW
+%token MINUSASSIGN_KW
+%token MODASSIGN_KW
+%token NATIVE_KW
+%token NEW_KW
+%token NE_KW
+%token NOTASSIGN_KW
+%token NULL_KW
+%token OPERATOR_KW
+%token ORASSIGN_KW
+%token OROR_KW
+%token OUTER_KW
+%token PACKAGE_KW
+%token PLUSASSIGN_KW
+%token PRIVATE_KW
+%token PROTECTED_KW
+%token PUBLIC_KW
+%token REST_KW
+%token RETURN_KW
+%token RSASSIGN_KW
+%token RS_KW
+%token SHORT_KW
+%token STATIC_KW
+%token SUPER_KW
+%token SWITCH_KW
+%token SYNCHRONIZED_KW
+%token THIS_KW
+%token THROW_KW
+%token THROWS_KW
+%token TIMEASSIGN_KW
+%token TRANSIENT_KW
+%token TRY_KW
+%token URSASSIGN_KW
+%token URS_KW
+%token VAR_KW
+%token VOID_KW
+%token VOLATILE_KW
+%token WHILE_KW
+
+/*** Extensions PLZEN. ***/
+%token BLOCKING_KW
+%token CONSUME_KW
+%token CRITICAL_KW
+%token FIRE_KW
+%token IMMEDIATE_KW
+%token IMPLICIT_KW
+%token LITERAL_TIME
+%token ON_KW
+%token PARALLEL_KW
+%token PASSBY_KW
+%token POP_KW
+%token PUSH_KW
+%token STATE_KW
+%token TRANSITION_KW
+
+
+/*** Extensions SQL-92. ***/
+
+%token DOSQL_KW
+%token DECLARESQL_KW
+%token ABSOLUTE_KW
+%token ALL_KW
+%token AND_KW
+%token ANY_KW
+%token AS_KW,
+%token ASC_KW
+%token AVG_KW
+%token BETWEEN_KW
+%token BIT_LENGTH_KW
+%token BOTH_KW
+%token BY_KW
+%token CHARACTER_LENGTH_KW
+%token CHAR_LENGTH_KW
+%token CLOSE_KW
+%token COLLATE_KW
+%token COMMIT_KW
+%token CONVERT_KW
+%token CORRESPONDING_KW
+%token COUNT_KW,
+%token CROSS_KW
+%token CURRENT_KW
+%token CURRENT_U_KW
+%token DELETE_KW
+%token DESC_KW
+%token DISTINCT_KW
+%token ESCAPE_KW
+%token EXCEPT_KW
+%token EXISTS_KW
+%token EXTRACT_KW
+%token FALSE_KW
+%token FETCH_KW
+%token FIRST_KW
+%token FOR_KW
+%token FROM_KW
+%token FULL_KW
+%token GROUP_KW
+%token HAVING_KW
+%token IN_KW
+%token INDICATOR_KW
+%token INSERT_KW
+%token INTERSECT_KW
+%token INTO_KW
+%token IS_KW
+%token JOIN_KW
+%token LAST_KW
+%token LEADING_KW
+%token LEFT_KW
+%token LIKE_KW
+%token LOWER_KW
+%token MATCH_KW
+%token MAX_KW
+%token MIN_KW
+%token MODULE_KW
+%token NATURAL_KW
+%token NEXT_KW
+%token NOT_KW
+%token NULL_KW
+%token OCTET_LENGTH_KW
+%token OF_KW
+%token OPEN_KW
+%token OR_KW
+%token ORDER_KW
+%token OUTER_KW
+%token OVERLAPS_KW
+%token PARTIAL_KW
+%token POSITION_KW
+%token PRIOR_KW
+%token RELATIVE_KW
+%token RIGHT_KW
+%token ROLLBACK_KW
+%token SELECT_KW
+%token SESSION_U_KW
+%token SET_KW
+%token SOME_KW
+%token SUBSTRING_KW
+%token SUM_KW
+%token SYSTEM_U_KW
+%token TABLE_KW
+%token TRAILING_KW
+%token TRANSLATE_KW
+%token TRIM_KW
+%token TRUE_KW
+%token UNION_KW
+%token UNIQUE_KW
+%token UNKNOWN_KW
+%token UPDATE_KW
+%token UPPER_KW
+%token USER_KW
+%token USING_KW
+%token VALUE_KW
+%token VALUES_KW
+%token WHERE_KW
+%token WORK_KW
+
+
+/****************************************************************
+* Container for all elements produced during parsing.
+****************************************************************/
+
+%union
+{
+    bool boolValue;
+    wchar *string;
+    int	 integerNumber;
+    unsigned int flag;
+    float floatNumber;
+    int longNumber[2];
+    double doubleNumber;
+    JCIdentifier *identifier;
+    JCDimIdentifier *dimIdentifier;
+    JCPackage *package;
+    JCPackageDeclaration *packDecl;
+    JCMember *member;
+    JCReferencedType *type;
+    JCActionBlock *actionBlock;
+    JCHandlingBlock *handlerBlock;
+    JCAction *action;
+    JCStatement *statement;
+    JCExpression *expression;
+    JCVariableDeclaration *varDecl;
+    JCType *typeDecl;
+    JCPackageName *packName;
+    TransitionList *transitionList;
+    JCTransition *transition;
+
+/*** Extension SQL-92. ***/
+    SqlStatementList *sqlStatList;
+    JCSqlStatement *sql92Statement;
+    JCSqlClause *sqlClause;
+    JCSqlExpression *sqlExpression;
+    JCSqlIdentifier *sqlIdentifier;
+    JCSqlIdentList *sqlIdentList;
+}
+
+/****************************************************************
+* Section: Typing of the objects returned by the non-terminals.
+****************************************************************/
+
+%type <string> IDENTIFIER_KW
+
+%type <packName> PackageStatement
+%type <packName> PackageName
+%type <packName> TypeImportOnDemandStatement
+%type <type> Type
+%type <type> NonArrayType
+%type <type> ArrayType
+%type <type> SuperClass
+%type <type> ResultType
+%type <type> ExtendsInterface ExtendsInterface.Opt
+%type <type> Throws.Opt
+%type <type> Interface
+%type <typeDecl> InterfaceDeclaration
+%type <typeDecl> ClassDeclaration
+%type <typeDecl> TypeDeclaration
+%type <typeDecl> TypeDeclarationBody
+%type <varDecl> VariableDeclarators
+%type <varDecl> VariableDeclarator
+%type <varDecl> ParameterList.Opt
+%type <varDecl> ParameterList
+%type <varDecl> Parameter
+%type <member> InterfaceBody
+%type <member> LimitedFieldDeclarations
+%type <member> LimitedFieldDeclaration
+%type <member> MethodOrFieldVarDeclaration
+%type <member> MethodDeclarator ConstructorDeclarator
+%type <member> ClassBody
+%type <member> FieldDeclarations FieldDeclarations.Opt
+%type <member> FieldDeclaration
+%type <dimIdentifier> DeclaratorName
+%type <actionBlock> StaticInitializer
+%type <actionBlock> MethodBody ConstructorBody
+%type <actionBlock> Block TryHeadStatement
+%type <actionBlock> Finally
+%type <action> LocalVariableDeclarationAndStatements
+%type <action> LocalVariableDeclarationAndStatements.Opt
+%type <action> LocalVariableDeclarationOrStatement
+%type <action> LocalVariableDeclarationStatement
+%type <statement> Statement
+%type <statement> LabeledStatement
+%type <statement> ExpressionStatement
+%type <statement> SelectionStatement
+%type <statement> IterationStatement
+%type <statement> IfHeadStatement ElseStatement.Opt
+%type <action> ForInit
+%type <action> ForIncrOpt
+%type <statement> ExplicitConstructorCallStatement
+%type <statement> ExplicitConstructorCallStatement.Opt
+%type <statement> ExpressionStatements
+%type <statement> JumpStatement
+%type <statement> GuardingStatement
+%type <handlerBlock> Catches
+%type <handlerBlock> Catch
+%type <expression> FieldAccess
+%type <expression> CastExpression
+%type <expression> ElementInitializers.Opt
+%type <expression> VariableInitializer
+%type <expression> ArrayInitializer
+%type <expression> ElementInitializers
+%type <expression> Expression.Opt
+%type <expression> PostfixExpression
+%type <expression> PostIncrement
+%type <expression> PostDecrement
+%type <expression> UnaryExpression
+%type <expression> PreIncrement
+%type <expression> PreDecrement
+%type <expression> UnaryExpressionNotPlusMinus
+%type <expression> MultiplicativeExpression
+%type <expression> AdditiveExpression
+%type <expression> ShiftExpression
+%type <expression> RelationalExpression
+%type <expression> EqualityExpression
+%type <expression> AndExpression
+%type <expression> ExclusiveOrExpression
+%type <expression> InclusiveOrExpression
+%type <expression> ConditionalAndExpression
+%type <expression> ConditionalOrExpression
+%type <expression> ConditionalExpression
+%type <expression> DimExpressions
+%type <expression> DimExpression
+%type <expression> AllocationExpression
+%type <expression> NotJustName
+%type <expression> AssignmentExpression
+%type <expression> PrimaryExpression
+%type <expression> MethodAccess
+%type <expression> ArgumentList
+%type <expression> ArgumentList.Opt
+%type <expression> Expression
+%type <expression> Assignment
+%type <expression> ComplexPrimary
+%type <expression> ArrayAccess
+%type <expression> MethodCall
+%type <expression> Literal
+%type <boolValue> LITERAL_BOOLEAN
+%type <string> LITERAL_CHAR
+%type <floatNumber> LITERAL_FLOAT
+%type <doubleNumber> LITERAL_DOUBLE
+%type <integerNumber> LITERAL_INT
+%type <longNumber> LITERAL_LONG
+%type <string> LITERAL_STRING
+%type <flag> ImportBody
+%type <flag> EmptyStatement
+%type <flag> PrimitiveType
+%type <flag> Dims.Opt
+%type <flag> Dims
+%type <flag> AssignmentOperator
+%type <flag> ConstructorModifiers
+%type <flag> ConstructorModifier
+%type <flag> ClassModifiers
+%type <flag> ClassModifier
+%type <flag> MethodModifiers MethodModifiers.Opt 
+%type <flag> MethodModifier
+%type <flag> SubCategory2
+%type <flag> SubCategory1
+%type <identifier> Identifier
+%type <identifier> IdentifierOpt
+%type <identifier> QualifiedName
+%type <identifier> Name NameArrayStart ParenthisedName
+%type <identifier> ThisOrSuper
+%type <identifier> TypeName
+%type <identifier> TypeNameList
+
+/*** Extensions PLZEN. ***/
+%type <member> StateMember StateDeclarator
+%type <actionBlock> StateBody StateBlock
+%type <action> LocalVarDecAndStateStatements
+%type <action> LocalVarDecOrStateStatement
+%type <statement> StateStatement
+%type <statement> FireStatement
+%type <statement> CriticalStatement
+%type <expression> TimeInfo.Opt TimeValue
+%type <expression> TransitionDestination
+%type <integerNumber> LITERAL_TIME
+%type <integerNumber> TransitionModifiers.Opt TransitionModifiers TransitionModifier
+%type <identifier> FireDestination.Opt
+%type <identifier>  NameList
+%type <integerNumber> TransitionSkip DestinationModifier.Opt
+%type <transitionList> StateTransitions.Opt StateTransitions
+%type <transition> StateTransition PureStateTransition
+
+
+
+/*** Extensions SQL-92. ***/
+%type <expression> sql92.EmbeddedVarName sql92.IndicatorVar Receiver.Opt
+%type <statement> EmbeddedSqlStatement ActualSqlPart
+%type <sqlStatList> sql92.ProcedureStatementList
+%type <sql92Statement> sql92.ProcedureStatement
+%type <sql92Statement> sql92.SingleStatement
+%type <sql92Statement> sql92.DataStatement
+%type <sql92Statement> sql92.OpenStatement
+%type <sql92Statement> sql92.FetchStatement
+%type <sql92Statement> sql92.CloseStatement
+%type <sql92Statement> sql92.DataChange
+%type <sql92Statement> sql92.DeleteStatementPos
+%type <sql92Statement> sql92.DeleteStatementSearched
+%type <sql92Statement> sql92.InsertStatement
+%type <sql92Statement> sql92.UpdateStatementPos
+%type <sql92Statement> sql92.UpdateStatementSearched
+%type <sql92Statement> sql92.SelectStatementSingleRow
+%type <sql92Statement> sql92.SelectStatementMultipleRow
+%type <sql92Statement> sql92.RollbackStatement
+%type <sql92Statement> sql92.CommitStatement
+%type <sql92Statement> sql92.TransactionStatement
+%type <sql92Statement> sql92.InsertColsAndSource
+%type <sqlClause> sql92.SelectList
+%type <sqlClause> sql92.SelectTargetList
+%type <sqlClause> sql92.FetchTargetList
+%type <sqlClause> sql92.SelectSubList
+%type <sqlClause> sql92.SelectSubListElement
+%type <sqlClause> sql92.TableReferenceList
+%type <sqlClause> sql92.TableReference sql92.TableReferenceEndPart
+%type <sqlClause> sql92.FromClause
+%type <sqlClause> sql92.GroupByClauseOpt sql92.GroupByClause
+%type <sqlClause> sql92.OrderByOpt
+%type <sqlClause> sql92.SortList sql92.SortItem
+%type <sqlClause> sql92.GroupingColumnRefList sql92.GroupingColumnRef
+%type <sqlClause> sql92.InValueList
+%type <sqlClause> sql92.RowValueConstrList
+%type <sqlClause> sql92.TableValueConstrList
+%type <sqlClause> sql92.TableExpression
+%type <sqlExpression> sql92.FetchOrientationOpt
+%type <sqlExpression> sql92.FetchOrientation
+%type <sqlExpression> sql92.QueryExpr
+%type <sqlExpression> sql92.SetClauseList
+%type <sqlExpression> sql92.SetClause
+%type <sqlExpression> sql92.SimpleValueSpec
+%type <sqlExpression> sql92.DerivedColumn
+%type <sqlExpression> sql92.ValueExpr
+%type <sqlExpression> sql92.VariableSpec
+%type <sqlExpression> sql92.JoinedTable
+%type <sqlExpression> sql92.WhereClauseOpt sql92.WhereClause
+%type <sqlExpression> sql92.HavingClauseOpt sql92.HavingClause
+%type <sqlExpression> sql92.QuerySpec sql92.SubQuery
+%type <sqlExpression> sql92.SearchCond
+%type <sqlExpression> sql92.BooleanTerm
+%type <sqlExpression> sql92.BooleanFactor
+%type <sqlExpression> sql92.BooleanTest
+%type <sqlExpression> sql92.BooleanPrimary
+%type <sqlExpression> sql92.Predicate sql92.ComparePred sql92.BetweenPred
+%type <sqlExpression> sql92.InPred sql92.LikePred sql92.NullPred
+%type <sqlExpression> sql92.QuantifiedCompPred  sql92.ExistsPred sql92.UniquePred
+%type <sqlExpression> sql92.MatchPred sql92.OverlapsPred
+%type <sqlExpression> sql92.Literal
+%type <sqlExpression> sql92.NullSpec sql92.DefaultSpec
+%type <sqlExpression> sql92.RowValueConstr sql92.RowValueConstrEle
+%type <sqlExpression> sql92.UpdateSource
+%type <sqlExpression> sql92.NumericValueExpr sql92.StringValueExpr
+%type <sqlExpression> sql92.Term sql92.Factor
+%type <sqlExpression> sql92.NumericPrimary sql92.ValueExprPrimary sql92.UnsignedValueSpec
+%type <sqlExpression> sql92.NumericValueFunction
+%type <sqlExpression> sql92.SetFunctionSpec
+%type <sqlExpression> sql92.UnsignedLiteral sql92.GeneralValueSpec
+%type <sqlExpression> sql92.SignedNumericLiteral sql92.GeneralLiteral
+%type <sqlExpression>  sql92.UnsignedNumericLiteral
+%type <sqlExpression> sql92.SetFctType
+%type <sqlExpression> sql92.InPredValue
+%type <sqlExpression> sql92.CharValueExpr
+%type <sqlExpression> sql92.SimpleTable sql92.NonJoinQueryPrimary
+%type <sqlExpression> sql92.QueryTerm sql92.NonJoinQueryTerm
+%type <sqlExpression> sql92.NonJoinQueryExpr
+%type <sqlExpression> sql92.ExplicitTable sql92.TableValueConstr
+%type <sqlIdentList> IdentifierList
+%type <sqlIdentList> sql92.InsertColList
+%type <sqlIdentList> sql92.NamedColumnJoin
+%type <sqlIdentifier> sql92.AsClause
+%type <sqlIdentifier> sql92.TableName
+%type <sqlIdentifier> sql92.CollateClauseOpt sql92.CollateClause
+%type <sqlIdentifier> sql92.QualifiedName
+%type <flag> sql92.TruthValue sql92.NotOpt
+%type <flag> sql92.SetQuantifier
+%type <flag> sql92.SortDirectionOpt sql92.SortDirection
+%type <flag> sql92.CompOp
+%type <flag> sql92.MatchModeOpt
+%type <flag> sql92.UniqueOpt
+%type <flag> sql92.FullOpt
+%type <flag> sql92.Quantifier
+%type <flag> sql92.AllOpt
+%type <flag> SqlStatementAction
+
+
+%left ';'
+%left '='
+%left '(' ')'
+%left ','
+%left '?'
+%left '|'
+%left '^'
+%left '&'
+%left EQ_KW NE_KW
+%left '>' '<' GE_KW LE_KW 
+/*
+%left '>' '<' '=' GE_KW LE_KW NE_KW
+*/
+%left URS_KW RS_KW LS_KW
+%right  '~'
+%left '+' '-'
+%left '*' '/' '%'
+%left '.'
+
+
+/*** Extensions SQL-92. ***/
+%left WHERE_KW
+%left OR_KW
+%left AND_KW
+
+%start CompilationUnit
+
+/* --------------- Debut de la grammaire --------------- */
+%%
+
+/* Compilation Unit. */
+CompilationUnit:
+    /* Nothing */
+    | UnitList
+
+UnitList:
+    UnitComponent
+    | UnitList UnitComponent
+
+UnitComponent:
+    PackageStatement
+    {
+	 if (!compiler->defineCurrentPackage($1)) {
+	    // ERRMSG: "redefinition of current package."
+	    // return mortal error.
+	  }
+     }
+    | ImportStatements
+    {
+    }
+    | TypeDeclaration
+    {
+    }
+
+/* Packages. */
+
+PackageStatement:
+    PACKAGE_KW PackageName ';'
+    {
+	$$= $2;
+     }
+
+
+PackageName:
+    Identifier
+    {
+	JCPackageName *packName;
+	packName= new JCPackageName($1);
+	$$= packName;
+     }
+    | PackageName '.' Identifier
+    {
+	$1->addName($3);
+	$$= $1;
+     }
+
+
+/* Import Statements. */
+
+ImportStatements:
+    IMPORT_KW ImportBody
+
+
+ImportBody:
+    PackageName ';'
+    {
+	    // List of identifiers, which can define a package or a type within a package.
+	compiler->attachSynonymName($1);
+	$$= 0;
+     }
+    |  TypeImportOnDemandStatement
+    {
+	    // Make a package to be searched for when a name is not resolved.
+	compiler->attachOnDemandPackage($1);
+	$$= 0;
+     }
+
+
+/*  Never happens, since we don't know how many components a package name can have.
+TypeImportStatement:
+    PackageName '.' Identifier ';'
+*/
+
+
+TypeImportOnDemandStatement:
+    PackageName '.' '*' ';'
+    {
+	$$= $1;
+    }
+
+
+/*
+TypeDeclarations:
+    TypeDeclaration
+    | TypeDeclarations  TypeDeclaration
+*/
+
+TypeDeclaration:
+    ClassModifiers
+    {
+	thePackage->setCurrentModifiers($1);
+    }
+    TypeDeclarationBody
+    {
+    	if ($3) {
+	    if (!($3->setModifiers($1))) {
+		compiler->addError("Incompatible access flag");
+//		return non-mortal error.
+	     }
+	 }
+	$$= $3;
+	thePackage->setCurrentModifiers(0);
+     }
+    |  TypeDeclarationBody
+   {
+	$$= $1;
+     }
+
+
+TypeDeclarationBody:
+    ClassDeclaration
+    {
+	JCClass *tmpDebug;
+	tmpDebug= (JCClass *)$1;
+	$$= $1;
+     }
+    |  InterfaceDeclaration
+    {
+	JCInterface *tmpDebug;
+	tmpDebug= (JCInterface *)$1;
+	$$= $1;
+     }
+
+
+/* Class Declarations. */
+
+ClassDeclaration:
+   CLASS_KW
+    {
+	compiler->pushLineNumber();
+    }
+   Identifier
+    {
+	thePackage->startClass($3);
+     }
+    SuperClass
+    {
+	JCClass *tmpDebug;
+	tmpDebug= (JCClass *)thePackage->getCurrentType();
+	tmpDebug->setSuperClass($5);
+     }
+    Interface ClassBody
+    {
+	JCClass *tmpDebug;
+	tmpDebug= (JCClass *)thePackage->getCurrentType();
+	tmpDebug->setInterfaces($7);
+	tmpDebug->setBody($8);
+	thePackage->endCurrentClass();
+	tmpDebug->setLineRange(compiler->popLineNumber(), compiler->currentLineNumber());
+	$$= tmpDebug;
+     }
+
+
+SuperClass:
+    /* Optional. */
+    {
+	$$= thePackage->getStarClass();
+     }
+    |  EXTENDS_KW TypeName
+    {
+	JCReferencedType *result;
+
+	result= new JCReferencedType;
+	result->setKind(TYPE_CLASS);
+	result->setTypeName($2);
+	$$= result;
+     }
+
+
+Interface:
+    /* Optional. */
+    {
+	$$= NULL;
+     }
+    |  IMPLEMENTS_KW TypeNameList
+    {
+	JCReferencedType *typeList= NULL, *currentPtr, *lastPtr= NULL;
+	JCIdentifier *tmpName;
+
+	tmpName= $2;
+	while (tmpName) {
+	    currentPtr= new JCReferencedType;
+	    currentPtr->setKind(TYPE_INTERFACE);
+	    currentPtr->setTypeName(tmpName);
+	    if (!thePackage->bind(tmpName, currentPtr)) {
+		thePackage->addUnknown(currentPtr);
+	    }
+	    if (lastPtr == NULL) {
+		typeList= currentPtr;
+	     }
+	    else {
+		lastPtr->setNext(currentPtr);
+	     }
+	    lastPtr= currentPtr;
+	    tmpName= tmpName->getNext();
+	 }
+	$$= typeList;
+     }
+
+
+ClassBody:
+    '{' FieldDeclarations.Opt '}'
+    {
+	$$= $2;
+     }
+
+
+/* Field Declarations. */
+
+LimitedFieldDeclarations:
+    LimitedFieldDeclaration
+    {
+	$$= $1;
+     }
+    |  LimitedFieldDeclarations LimitedFieldDeclaration
+    {
+	$1->link($2);
+	$$= $1;
+     }
+
+
+FieldDeclarations.Opt:
+    /* Optional. */
+    {
+	$$= NULL;
+     }
+    |  FieldDeclarations
+    {
+	$$= $1;
+     }
+
+
+FieldDeclarations:
+    FieldDeclaration
+    {
+	$$= $1;
+     }
+    |  FieldDeclarations FieldDeclaration
+    {
+	$1->link($2);
+	$$= $1;
+     }
+
+/* ATTENTION: Doit trouver comment discerner entre une methode normale et
+	un constructeur.  Ca semble etre la seule source de confusion qui reste dans
+	la grammaire.
+*/
+
+
+FieldDeclaration:
+    LimitedFieldDeclaration
+    {
+	thePackage->setCurrentModifiers(0);	// Reset modifiers.
+	$$= $1;
+     }
+    |  StaticInitializer
+    {
+/*
+	JCStaticInitializer *result;
+
+	result= new JCStaticInitializer;
+	result->setBlock($1);
+*/
+
+	JCMethod *result;
+	JCDimIdentifier *methodName;
+	JCCteUtf8 *aCteName;
+	JCIdentifier *tmpIdent;
+
+	aCteName= JCCteUtf8::getWellKnownName(JCCteUtf8::clinitIdent);
+	tmpIdent= new JCIdentifier(aCteName);
+	methodName= new JCDimIdentifier;
+	methodName->setName(tmpIdent);
+	methodName->setNbrDimensions(0);
+
+	result= new JCMethod;
+	result->setModifiers(ACC_STATIC);
+	result->setName(methodName);
+	result->setParameters(NULL);
+	result->setConstructor(true);
+	result->setBody($1);
+	result->setReturnedType(JCReferencedType::getVoidType());
+
+	result->quickExport();
+	thePackage->addMemberInType(result);
+
+	result->setLineRange(compiler->popLineNumber(), compiler->currentLineNumber());
+
+	$$= result;
+     }
+
+
+LimitedFieldDeclaration:
+/* JUNK:
+    FieldVariableDeclaration ';'
+    |  MethodDeclaration
+*/
+    MethodModifiers.Opt ResultType
+    {
+	/* MethodModifiers.Opt sets the package's currentModifiers. */
+	compiler->pushLineNumber();
+    }
+    MethodOrFieldVarDeclaration
+    {
+	JCField *tmpFieldPtr;
+	$4->setLineRange(compiler->popLineNumber(), compiler->currentLineNumber());
+	if ($4->memberType() == FIELD_MEMBER) {    // Fields can come in lists.
+	    tmpFieldPtr= (JCField *)$4;
+	    while (tmpFieldPtr) {
+		if ($2->isVoid()) {
+		    /* ERRMSG: "Can't declare a field to be of 'VOID' type. */
+		    /* return non-mortal error. */
+		    /* Destroy the JCField declaration. */
+		}
+		else {
+		    tmpFieldPtr->setModifiers($1);
+		    tmpFieldPtr->setReturnedType($2);
+		    thePackage->addMemberInType(tmpFieldPtr);
+		}
+		tmpFieldPtr= (JCField *)tmpFieldPtr->getNext();
+	     }
+	 }
+	else {
+	    if (((JCMethod *)$4)->isConstructor()) {
+		$4->setReturnedType(JCReferencedType::getVoidType());
+		delete $2;
+	    }
+	    else {
+		$4->setReturnedType($2);
+	    }
+	    ((JCMethod *)$4)->quickExport();
+	    thePackage->addMemberInType($4);
+	 }
+	$$= $4;
+    }
+/*** Extension PLZEN. ***/
+  |  MethodModifiers.Opt StateMember
+  {
+	// ATTN: the 'static'  modifier should be refuse, unless we include
+	// static states.
+	$2->setModifiers($1);
+	thePackage->addMemberInType($2);
+	$$= $2;
+  }
+
+/* JUNK:
+    | MethodOrFieldVarDeclaration
+*/
+
+MethodOrFieldVarDeclaration:
+    VariableDeclarators ';'
+    {
+	JCField *currentField, *lastField= NULL, *fieldList;
+	JCVariableDeclaration *tmpDecl;
+
+	tmpDecl= $1;
+	while (tmpDecl) {
+	    currentField= new JCField;
+	    currentField->setDeclarator(tmpDecl);
+	    if (lastField == NULL) {
+		fieldList= currentField;
+	     }
+	    else {
+		lastField->setNext(currentField);
+	     }
+	    lastField= currentField;
+	    tmpDecl= tmpDecl->getNext();
+	 }
+	$$= fieldList;
+     }
+    |  MethodDeclarator Throws.Opt MethodBody
+    { 
+	((JCMethod *)$1)->setExceptions($2);
+	((JCMethod *)$1)->setBody($3);
+	$$= $1;
+     }
+    | ConstructorDeclarator Throws.Opt ConstructorBody
+    {
+	((JCMethod *)$1)->setExceptions($2);
+	((JCMethod *)$1)->setBody($3);
+	$$= $1;
+     }
+
+
+/* JUNK:
+FieldVariableDeclaration:
+    VariableModifiers Type VariableDeclarators
+    |  Type VariableDeclarators
+*/
+
+VariableDeclarators:
+    VariableDeclarator
+    {
+	$$= $1;
+     }
+    |  VariableDeclarators ',' VariableDeclarator
+    {
+	$1->link($3);
+	$$= $1;
+     }
+
+VariableDeclarator:
+    DeclaratorName
+    {
+	JCVariableDeclaration *result;
+	result= new JCVariableDeclaration;
+	result->setName($1);
+	$$= result;	
+     }
+    |  DeclaratorName '=' VariableInitializer
+    {
+	JCVariableDeclaration *result;
+	result= new JCVariableDeclaration;
+	result->setName($1);
+	result->setInitializator($3);
+	$$= result;	
+     }
+
+/*
+DeclaratorName:
+    Identifier Dims
+*/
+
+DeclaratorName:
+    Identifier Dims.Opt
+    {
+	JCDimIdentifier *result;
+	result= new JCDimIdentifier;
+	result->setName($1);
+	result->setNbrDimensions($2);
+	$$= result;
+     }
+
+/* DeclaratorName is a simplification of the following:
+    Identifier
+     |  DeclaratorName '[' ']'
+*/
+
+
+VariableInitializer:
+    Expression
+    {
+	$$= $1;
+     }
+    |  ArrayInitializer
+    {
+	$$= $1;
+     }
+/*
+    |  '{' ArrayInitializers '}'	/ ATTENTION: Il y a une virgule optionelle dans le texte. /
+
+ArrayInitializers:
+    VariableInitializer
+    |  ArrayInitializers ','
+*/
+
+/* Method Declarations. */
+
+/* JUNK:
+MethodDeclaration:
+    ResultType MethodDeclarator Throws.Opt MethodBody
+    |  MethodModifiers  ResultType MethodDeclarator Throws.Opt MethodBody
+*/
+
+ResultType:
+    Type
+    {
+	$$= $1;
+     }
+    |  VOID_KW
+    {
+	JCReferencedType *result;
+	result= JCReferencedType::getVoidType();
+	$$= result;
+     }
+
+
+MethodDeclarator:
+    Identifier '(' ParameterList.Opt ')' Dims.Opt
+    {
+	JCMethod *result;
+	JCDimIdentifier *methodName;
+
+	methodName= new JCDimIdentifier;
+	methodName->setName($1);
+	methodName->setNbrDimensions($5);
+
+	result= new JCMethod;
+	result->setModifiers(thePackage->getCurrentModifiers());
+	result->setName(methodName);
+	result->setParameters($3);
+	$$= result;
+     }
+
+
+/* MOD-960606 [HD]:  Replaced this version using DeclaratorName by one with an Identifier.
+    DeclaratorName '(' ParameterList.Opt ')' Dims.Opt
+*/
+/* MethodDeclarator is now a simplification of the following.
+    DeclaratorName '(' ParameterList.Opt ')'
+    | MethodDeclarator '[' ']'
+*/
+
+
+ParameterList.Opt:
+    {
+	$$= NULL;
+     }
+    | ParameterList
+    {
+	$$= $1;
+     }
+
+ParameterList:
+    Parameter
+    {
+	$$= $1;
+     }
+    |  ParameterList ',' Parameter
+    {
+	$1->link($3);
+	$$= $1;
+     }
+
+Parameter:
+    Type DeclaratorName
+    {
+	JCVariableDeclaration *result;
+	result= new JCVariableDeclaration;
+	result->setName($2);
+	result->setTyping($1);
+	$$= result;
+     }
+
+Throws.Opt:
+    /* Optional. */
+    {
+	$$= NULL;
+     }
+    |  THROWS_KW TypeNameList
+    {
+	JCReferencedType *typeList= NULL, *currentPtr, *lastPtr= NULL;
+	JCIdentifier *tmpName;
+
+	tmpName= $2;
+	while (tmpName) {
+	    currentPtr= new JCReferencedType;
+	    currentPtr->setKind(TYPE_INTERFACE);
+	    currentPtr->setTypeName(tmpName);
+	    if (lastPtr == NULL) {
+		typeList= currentPtr;
+	     }
+	    else {
+		lastPtr->setNext(currentPtr);
+	     }
+	    lastPtr= currentPtr;
+	    tmpName= tmpName->getNext();
+	 }
+	$$= typeList;
+     }
+
+TypeNameList:
+    TypeName
+    {
+	$$= $1;
+     }
+    |  TypeNameList ',' TypeName
+    {
+	$1->link($3);
+	$$= $1;
+     }
+
+
+MethodBody:
+    Block
+    {
+	$$= $1;
+     }
+    |  ';'
+    {
+	JCActionBlock *result;
+	result= new JCActionBlock;
+	$$= result;
+     }
+
+/* Constructor Method Declarations. */
+
+/* JUNK:
+ConstructorDeclaration:
+    ConstructorModifiers ConstructorDeclarator Throws.Opt ConstructorBody
+    | ConstructorDeclarator Throws.Opt ConstructorBody
+
+ConstructorDeclaration:
+    MethodModifiers.Opt ConstructorDeclarator Throws.Opt ConstructorBody
+    { fprintf(stderr, "> Constructor Method Declaration OK.\n"); }
+
+ConstructorDeclarator:
+    TypeName '(' ParameterList.Opt ')'
+    {
+	fprintf(stderr, "Ne fait rien pour le moment.\n");
+     }
+
+*/
+
+ConstructorDeclarator:
+    '(' ParameterList.Opt ')'
+    {
+	JCMethod *result;
+	JCDimIdentifier *methodName;
+	JCCteUtf8 *aCteName;
+	JCIdentifier *tmpIdent;
+
+	aCteName= JCCteUtf8::getWellKnownName(JCCteUtf8::initIdent);
+	tmpIdent= new JCIdentifier(aCteName);
+	methodName= new JCDimIdentifier;
+	methodName->setName(tmpIdent);
+	methodName->setNbrDimensions(0);
+
+	result= new JCMethod;
+	result->setModifiers(thePackage->getCurrentModifiers());
+	result->setName(methodName);
+	result->setParameters($2);
+	result->setConstructor(true);
+	$$= result;
+      }
+
+ConstructorBody:
+    '{'
+     {
+	thePackage->pushNameSpace();
+	compiler->pushLineNumber();
+     }
+    ExplicitConstructorCallStatement.Opt LocalVariableDeclarationAndStatements.Opt '}'
+    {
+	JCActionBlock *result;
+	result= new JCActionBlock;
+	if ($3) {
+	    $3->link($4);
+	    result->setContent($3);
+	 }
+	else {
+	    JCExprStat *superInit;
+	    JCInvokeExpr *invoker;
+	    JCImpliedInitialization *impliedInit;
+	    JCIdentifier *superIdent;
+
+	    superIdent= new JCIdentifier;
+	    superIdent->resolveToSuper();
+    
+	    invoker= new JCInvokeExpr();
+		// This automatically inserts a var access as a sub-expression.
+	    invoker->setName(superIdent);
+	    invoker->setArguments(NULL);
+
+	    superInit= new JCExprStat();
+	    superInit->setSubCategory(INVOKE_EXPRESSION);
+	    superInit->setSubExpression(invoker);
+
+	    invoker->bindInLocalSpace(thePackage->getBottomNameSpace());
+    
+	    impliedInit= new JCImpliedInitialization(thePackage->getCurrentType());
+	    impliedInit->link($4);
+	    superInit->link(impliedInit);
+	    impliedInit->setLineRange(compiler->currentLineNumber(), compiler->currentLineNumber());
+	    superInit->setLineRange(compiler->currentLineNumber(), compiler->currentLineNumber());
+	    result->setContent(superInit);
+	 }
+	result->setNameSpace(thePackage->popNameSpace());
+	result->setLineRange(compiler->popLineNumber(), compiler->currentLineNumber());
+	$$= result;
+     }
+
+ExplicitConstructorCallStatement.Opt:
+    /* Optional. */
+    {
+	$$= NULL;
+     }
+    | ExplicitConstructorCallStatement
+    {
+	$$= $1;
+     }
+
+ExplicitConstructorCallStatement:
+    ThisOrSuper '(' ArgumentList.Opt ')' ';'
+    {
+	JCExprStat *result;
+	JCInvokeExpr *tmpExpr;
+
+	tmpExpr= new JCInvokeExpr;
+		// This automatically inserts a var access as a sub-expression.
+	tmpExpr->setName($1);
+	tmpExpr->setArguments($3);
+	tmpExpr->bindInLocalSpace(thePackage->getBottomNameSpace());
+
+	result= new JCExprStat;
+	result->setSubCategory(INVOKE_EXPRESSION);
+	result->setSubExpression(tmpExpr);
+
+	if ($1->getSpecialName() == JCIdentifier::snSuper) {
+	    JCImpliedInitialization *initializer= new JCImpliedInitialization(thePackage->getCurrentType());
+	    result->link(initializer);
+	}
+	$$= result;
+     }
+
+
+ThisOrSuper:
+    THIS_KW
+    {
+	JCIdentifier *result;
+	result= new JCIdentifier;
+	result->resolveToSelf();
+	$$= result;
+     }
+    |  SUPER_KW
+    {
+	JCIdentifier *result;
+	result= new JCIdentifier;
+	result->resolveToSuper();
+	$$= result;
+     }
+
+
+/* Class Loading and Initialization. */
+
+StaticInitializer:
+    STATIC_KW
+    {
+	compiler->pushLineNumber();
+    }
+    Block
+    {
+	$$= $3;
+     }
+
+
+/* Interface Declarations. */
+InterfaceDeclaration:
+    INTERFACE_KW Identifier
+    {
+	thePackage->startInterface($2);
+     }
+    ExtendsInterface.Opt InterfaceBody
+    {
+	JCInterface *tmpDebug;
+	tmpDebug= (JCInterface *)thePackage->getCurrentType();
+	tmpDebug->setTypeName($2);
+	tmpDebug->setInterfaces($4);
+	tmpDebug->setBody($5);
+	$$= tmpDebug;
+     }
+
+ExtendsInterface.Opt:
+    /* Optional. */
+    {
+	$$= NULL;
+     }
+    |  ExtendsInterface
+    {
+	$$= $1;
+     }
+
+
+ExtendsInterface:
+    EXTENDS_KW TypeNameList
+    {
+	JCReferencedType *typeList= NULL, *currentPtr, *lastPtr= NULL;
+	JCIdentifier *tmpName;
+
+	tmpName= $2;
+	while (tmpName) {
+	    currentPtr= new JCReferencedType;
+	    currentPtr->setKind(TYPE_INTERFACE);
+	    currentPtr->setTypeName(tmpName);
+	    if (!thePackage->bind(tmpName, currentPtr)) {
+		thePackage->addUnknown(currentPtr);
+	    }
+	    if (lastPtr == NULL) {
+		typeList= currentPtr;
+	     }
+	    else {
+		lastPtr->setNext(currentPtr);
+	     }
+	    lastPtr= currentPtr;
+	    tmpName= tmpName->getNext();
+	 }
+	$$= typeList;
+     }
+
+/*
+    | ExtendsInterface ',' TypeName
+*/
+
+InterfaceBody:
+    '{' LimitedFieldDeclarations '}'
+    {
+	$$= $2;
+     }
+
+
+/* Array Initialization (est-ce different de la VariableInitializer ?). */
+ArrayInitializer:
+    '{' ElementInitializers.Opt '}'	/* ATTENTION: Une virgule optionelle est dans le texte. */
+    {
+	JCBlockExpr *result;
+	result= new JCBlockExpr;
+	result->setInternal($2);
+	$$= result;
+     }
+
+ElementInitializers.Opt:
+    /* Optional. */
+    {
+	$$= NULL;
+     }
+    | ElementInitializers
+    {
+	$$= $1;
+     }
+
+ElementInitializers:
+    VariableInitializer
+    {
+	$$= $1;
+     }
+    |  ElementInitializers ',' VariableInitializer
+    {
+	$1->linkExpression($3);
+	$$= $1;
+     }
+
+/*
+    Element
+    |  ElementInitializers ',' Element
+
+Element:
+    Expression
+    |  ArrayInitializer
+*/
+
+
+/* Blocks and Statements. */
+
+Block:
+    '{' 
+    {
+	thePackage->pushNameSpace();
+	compiler->pushLineNumber();
+     }
+    LocalVariableDeclarationAndStatements
+     '}'
+    {
+	JCActionBlock *result;
+	result= new JCActionBlock;
+	result->setContent($3);
+	result->setNameSpace(thePackage->popNameSpace());
+	result->setLineRange(compiler->popLineNumber(), compiler->currentLineNumber());
+	$$= result;
+     }
+    | '{'
+     {
+	compiler->pushLineNumber();
+     }
+    '}'
+    {
+	JCActionBlock *result;
+	result= new JCActionBlock;
+	result->setLineRange(compiler->popLineNumber(), compiler->currentLineNumber());
+	$$= result;
+     }
+
+LocalVariableDeclarationAndStatements.Opt:
+    /* Optional. */
+    {
+	$$= NULL;
+     }
+    | LocalVariableDeclarationAndStatements
+
+LocalVariableDeclarationAndStatements:
+    LocalVariableDeclarationOrStatement
+    {
+	$$= $1;
+     }
+    |  LocalVariableDeclarationAndStatements LocalVariableDeclarationOrStatement
+    {
+	$1->link($2);	// ATTN: If JCAction is not keeping a lastMember, it is unefficient.
+	$$= $1;
+     }
+
+LocalVariableDeclarationOrStatement:
+    LocalVariableDeclarationStatement
+    {
+	$$= $1;
+     }
+    | Statement
+    {
+	$$= $1;
+     }
+    | error ';'
+    {
+	/* TMP: First try to put an error catcher. */
+	JCStatement *result;
+	result= new JCStatement;
+	compiler->popLineNumber();
+	$$= result;
+    }
+
+LocalVariableDeclarationStatement:
+    Type
+     {
+	compiler->pushLineNumber();
+     }
+    VariableDeclarators ';'
+    {
+	JCVarStat *result;
+	JCVariableDeclaration *tmpVarDecl;
+
+	result= new JCVarStat;
+	tmpVarDecl= $3;
+	while (tmpVarDecl) {
+	    tmpVarDecl->setTyping($1);
+	    tmpVarDecl= tmpVarDecl->getNext();
+	 }
+	result->setMembers($3);
+	result->setLineRange(compiler->popLineNumber(), compiler->currentLineNumber());
+	$$= result;
+     }
+
+
+Statement:
+    EmptyStatement
+    {
+	    // TMP: Send an empty statement to simplify 'NULL' testing higher.
+	JCStatement *result;
+	result= new JCStatement;
+	$$= result;
+     }
+    |  LabeledStatement
+    {
+	$$= $1;
+     }
+    | ExpressionStatement ';'
+    {
+	$1->setLineRange(compiler->currentLineNumber(), compiler->currentLineNumber());
+	$$= $1;
+     }
+    |  SelectionStatement
+    {
+	$$= $1;
+     }
+    |  IterationStatement
+    {
+	$$= $1;
+     }
+    |  JumpStatement
+    {
+	$$= $1;
+     }
+    |  GuardingStatement
+    {
+	$$= $1;
+     }
+    | Block
+    {
+	JCBlockStat *result;
+	result= new JCBlockStat;
+	result->setSubBlock($1);
+	$$= result;
+     }
+/*** Extension PLZEN ***/
+    | CriticalStatement
+    {
+	/* Ne doit pas avoir lieu lorsqu'on n'est pas dans un membre etat. */
+	$$= $1;	/* TMP */
+     }
+    | FireStatement
+    {
+	/* Ne doit pas avoir lieu lorsqu'on n'est pas dans un membre etat. */
+	$$= $1;	/* TMP */
+     }
+/*** Extension SQL-92 ***/
+    | EmbeddedSqlStatement ';'
+
+EmbeddedSqlStatement:
+    SqlStatementAction Receiver.Opt
+    {
+	isInSubset= 2;		// TMP: Define SQL reserved words to be active.
+    }
+    ActualSqlPart
+    {
+	if ($1 == 2) {
+	    ((JCMetaSqlStatement *)$4)->makeDeclarative();
+	    if ($2 != NULL) {
+		// TODO: Complain, can't make declarative statements and provide a context (yet).
+	    }
+	}
+	else {
+	    ((JCMetaSqlStatement *)$4)->setPipeContext($2);
+	    ((JCMetaSqlStatement *)$4)->bindToPackage(thePackage);
+	}
+	$$= $4;
+    }
+
+
+ActualSqlPart:
+    sql92.SingleStatement
+    {
+	isInSubset= 0;		// TMP: Define SQL reserved words to be inactive.
+
+	JCStatement *result;
+
+	result= new JCMetaSqlStatement($1);
+	$$= result;
+    }
+  | '{' sql92.ProcedureStatementList '}'
+    {
+	isInSubset= 0;		// TMP: Define SQL reserved words to be inactive.
+
+	JCBlockStat *containerStatement= new JCBlockStat();
+	JCActionBlock *block= new JCActionBlock();
+	JCStatement *result;
+
+	containerStatement->setSubBlock(block);
+	block->setContent($2->getFirst());
+	result= new JCMetaSqlStatement(containerStatement);
+	$$= result;
+    }
+
+
+SqlStatementAction:
+    DOSQL_KW
+    {
+	$$= 1;
+    }
+  | DECLARESQL_KW
+    {
+	$$= 2;
+    }
+
+
+EmptyStatement:
+	';'
+    {
+	$$= 0;
+     }
+
+
+LabeledStatement:
+    Identifier ':' 
+     {
+	compiler->pushLineNumber();
+     }
+    Statement
+    {
+	JCLabelStat *result;
+	result= new JCLabelStat;
+	result->setSubCategory(IDENT_LABELED);
+	result->setIdentifier($1);
+	result->setSubStatement($4);
+	result->setLineRange(compiler->popLineNumber(), compiler->currentLineNumber());
+	$$= result;
+     }
+    |  CASE_KW
+     {
+	compiler->pushLineNumber();
+     }
+    Expression ':' LocalVariableDeclarationOrStatement
+	/* MOD-960613 [HD]: Modifie pour supporter la declaration de 'vars' dans les case.
+	   Remplace 'Statement' par 'LocalVariableDeclarationOrStatement'. */
+    {
+	if (thePackage->isInsideSwitch()) {
+	    JCLabelStat *result;
+
+	    result= new JCLabelStat;
+	    result->setSubCategory(CASE_LABELED);
+	    result->setSubExpression($3);
+	    result->setSubStatement($5);
+	    thePackage->incCaseCount(true);
+	    $$= result;
+	}
+	else {
+	    compiler->addError("Case statement not in switch");
+
+		// TMP: Send an empty statement to simplify 'NULL' testing higher.
+	    $$= new JCStatement;
+	}
+	$$->setLineRange(compiler->popLineNumber(), compiler->currentLineNumber());
+     }
+    |  DEFAULT_KW 
+     {
+	compiler->pushLineNumber();
+     }
+    ':' LocalVariableDeclarationOrStatement
+	/* MOD-960613 [HD]: Modifie pour supporter la declaration de 'vars' dans les case. 
+	   Remplace 'Statement' par 'LocalVariableDeclarationOrStatement'. */
+    {
+	if (thePackage->isInsideSwitch()) {
+	    JCLabelStat *result;
+
+	    result= new JCLabelStat;
+	    result->setSubCategory(DEFAULT_LABELED);
+	    result->setSubStatement($4);
+	    thePackage->incCaseCount(false);
+	    $$= result;
+	}
+	else {
+	    compiler->addError("Default statement not in switch");
+		// TMP: Send an empty statement to simplify 'NULL' testing higher.
+	    $$= new JCStatement;
+	}
+	$$->setLineRange(compiler->popLineNumber(), compiler->currentLineNumber());
+     }
+
+ExpressionStatement:
+    Assignment
+    {
+	JCExprStat *result;
+	result= new JCExprStat;
+	result->setSubCategory(ASSIGN_EXPRESSION);
+	result->setSubExpression($1);
+	$$= result;
+     }
+    |  PreIncrement
+    {
+	JCExprStat *result;
+	result= new JCExprStat;
+	result->setSubCategory(PREINCR_EXPRESSION);
+	result->setSubExpression($1);
+	$$= result;
+     }
+    |  PreDecrement
+    {
+	JCExprStat *result;
+	result= new JCExprStat;
+	result->setSubCategory(PREDECR_EXPRESSION);
+	result->setSubExpression($1);
+	$$= result;
+     }
+    |  PostIncrement
+    {
+	JCExprStat *result;
+	result= new JCExprStat;
+	result->setSubCategory(POSTINCR_EXPRESSION);
+	result->setSubExpression($1);
+	$$= result;
+     }
+    |  PostDecrement
+    {
+	JCExprStat *result;
+	result= new JCExprStat;
+	result->setSubCategory(POSTDECR_EXPRESSION);
+	result->setSubExpression($1);
+	$$= result;
+     }
+    |  MethodCall
+    {
+	JCExprStat *result;
+	result= new JCExprStat;
+	result->setSubCategory(INVOKE_EXPRESSION);
+	result->setSubExpression($1);
+	$$= result;
+     }
+    |  AllocationExpression
+    {
+	JCExprStat *result;
+	result= new JCExprStat;
+	result->setSubCategory(ALLOC_EXPRESSION);
+	result->setSubExpression($1);
+	$$= result;
+     }
+
+IfHeadStatement:
+    IF_KW
+     {
+	compiler->pushLineNumber();
+     }
+    '(' Expression ')' Statement
+    {
+	JCSelectStat *result;
+	result= new JCSelectStat;
+	result->setSubCategory(IF_SELECTION);
+	result->setSubExpression($4);
+	result->setSubStatement($6);
+	$$= result;
+     }
+
+
+ElseStatement.Opt:
+	/* Optional. */
+    {
+	$$= NULL;
+    }
+    | ELSE_KW Statement
+    {
+	$$= $2;
+    }
+
+SelectionStatement:
+    IfHeadStatement ElseStatement.Opt
+    {
+	if ($2 != NULL) {
+	    $1->setSubCategory(IFELSE_SELECTION);
+	    ((JCSelectStat *)$1)->setFalseStatement($2);
+	}
+	$1->setLineRange(compiler->popLineNumber(), compiler->currentLineNumber());
+    }
+
+/*  OUTDATED_CODE:
+    IF_KW
+     {
+	compiler->pushLineNumber();
+     }
+    '(' Expression ')' Statement
+    {
+	JCSelectStat *result;
+	result= new JCSelectStat;
+	result->setSubCategory(IF_SELECTION);
+	result->setSubExpression($4);
+	result->setSubStatement($6);
+	result->setLineRange(compiler->popLineNumber(), compiler->currentLineNumber());
+	$$= result;
+     }
+    |  IF_KW
+     {
+	compiler->pushLineNumber();
+     }
+    '(' Expression ')' Statement ELSE_KW Statement
+    {
+	JCSelectStat *result;
+	result= new JCSelectStat;
+	result->setSubCategory(IFELSE_SELECTION);
+	result->setSubExpression($4);
+	result->setSubStatement($6);
+	result->setFalseStatement($8);
+	result->setLineRange(compiler->popLineNumber(), compiler->currentLineNumber());
+	$$= result;
+     }
+*/
+    |  SWITCH_KW
+     {
+	compiler->pushLineNumber();
+     }
+    '(' Expression ')'
+    {
+	thePackage->startCaseContext();
+    }
+    Block
+    {
+	JCSwitchStat *result;
+	result= new JCSwitchStat;
+	result->setSubExpression($4);
+	result->setSwitchTable($7, thePackage->endCaseContext());
+	result->setLineRange(compiler->popLineNumber(), compiler->currentLineNumber());
+	$$= result;
+     }
+
+
+IterationStatement:
+    WHILE_KW
+     {
+	compiler->pushLineNumber();
+     }
+    '(' Expression ')'
+	{
+	    thePackage->incLoopLevel();
+	}
+	Statement
+	{
+	    JCIterStat *result;
+	    result= new JCIterStat;
+	    result->setSubCategory(WHILE_ITERATION);
+	    result->setSubExpression($4);
+	    result->setSubStatement($7);
+	    result->setLineRange(compiler->popLineNumber(), compiler->currentLineNumber());
+	    thePackage->decLoopLevel();
+	    $$= result;
+	    }
+    |  DO_KW 
+	{
+	    compiler->pushLineNumber();
+	    thePackage->incLoopLevel();
+	}
+	Statement 
+	{
+	    thePackage->decLoopLevel();
+	}
+	WHILE_KW '(' Expression ')' ';'
+	{
+	    JCIterStat *result;
+	    result= new JCIterStat;
+	    result->setSubCategory(DO_ITERATION);
+	    result->setSubExpression($7);
+	    result->setSubStatement($3);
+	    result->setLineRange(compiler->popLineNumber(), compiler->currentLineNumber());
+	    $$= result;
+	    }
+    |  FOR_KW '(' 
+	{
+	    compiler->pushLineNumber();
+	    thePackage->pushNameSpace();
+	}
+	ForInit  Expression.Opt ';' ForIncrOpt ')'
+	{
+	    thePackage->incLoopLevel();
+	}
+	Statement
+	{
+	    JCIterStat *result;
+	    result= new JCIterStat;
+	    result->setSubCategory(FOR_ITERATION);
+	    result->setForInit($4);
+	    result->setSubExpression($5);
+	    result->setLoopExpression($7);
+	    result->setSubStatement($10);
+	    result->setNameSpace(thePackage->popNameSpace());
+	    thePackage->decLoopLevel();
+	    result->setLineRange(compiler->popLineNumber(), compiler->currentLineNumber());
+	    $$= result;
+	}
+
+
+ForInit:
+    ExpressionStatements ';'
+    {
+	$$= $1;
+     }
+    |  LocalVariableDeclarationStatement
+    {
+	$$= $1;
+     }
+    | ';'
+    {
+	JCAction *result= new JCAction;
+	$$= result;
+     }
+
+
+ForIncrOpt:
+    /* Optional. */
+    {
+	JCAction *result= new JCAction;
+	$$= result;
+     }
+    |  ExpressionStatements
+    {
+	$$= $1;
+     }
+
+ExpressionStatements:
+    ExpressionStatement
+    {
+	$$= $1;
+     }
+    |  ExpressionStatements ',' ExpressionStatement
+    {
+	$1->link($3);
+	$$= $1;
+     }
+
+JumpStatement:
+    BREAK_KW IdentifierOpt ';'
+    {
+	if (thePackage->isInsideSwitch() || (thePackage->getLoopLevel() > 0)) {
+	    JCJumpStat *result;
+	    result= new JCJumpStat;
+	    result->setSubCategory(BREAK_JUMP);
+	    result->setIdentifier($2);
+	    result->setLineRange(compiler->currentLineNumber(), compiler->currentLineNumber());
+	    $$= result;
+	}
+	else {
+	    compiler->addError("break not in switch or iterator statement");
+		// TMP: Send an empty statement to simplify 'NULL' testing higher.
+	    $$= new JCStatement;
+	}
+     }
+    |  CONTINUE_KW IdentifierOpt ';'
+    {
+	if (thePackage->getLoopLevel() > 0) {
+	    JCJumpStat *result;
+	    result= new JCJumpStat;
+	    result->setSubCategory(CONTINUE_JUMP);
+	    result->setIdentifier($2);
+	    result->setLineRange(compiler->currentLineNumber(), compiler->currentLineNumber());
+	    $$= result;
+	}
+	else {
+	    compiler->addError("continue not in switch or iterator statement");
+		// TMP: Send an empty statement to simplify 'NULL' testing higher.
+	    $$= new JCStatement;
+	}
+     }
+    |  RETURN_KW
+     {
+	compiler->pushLineNumber();
+     }
+    Expression.Opt ';'
+    {
+	JCJumpStat *result;
+	result= new JCJumpStat;
+	result->setSubCategory(RETURN_JUMP);
+	result->setSubExpression($3);
+	result->setLineRange(compiler->popLineNumber(), compiler->currentLineNumber());
+	$$= result;
+     }
+    |  THROW_KW
+     {
+	compiler->pushLineNumber();
+     }
+    Expression ';'
+    {
+	JCJumpStat *result;
+	result= new JCJumpStat;
+	result->setSubCategory(THROW_JUMP);
+	result->setSubExpression($3);
+	result->setLineRange(compiler->popLineNumber(), compiler->currentLineNumber());
+	$$= result;
+     }
+
+
+TryHeadStatement:
+    TRY_KW
+    {
+	compiler->pushLineNumber();
+    }
+    Block
+    {
+	$$= $3;
+    }
+
+GuardingStatement:
+    SYNCHRONIZED_KW
+     {
+	compiler->pushLineNumber();
+     }
+    '(' Expression ')' Statement
+    {
+	JCGuardStat *result;
+	result= new JCGuardStat;
+	result->setSubCategory(SYNCH_GUARD);
+	result->setSubExpression($4);	// ATTN: Must resolve to an object (including array).
+	result->setSubStatement($6);
+	result->setLineRange(compiler->popLineNumber(), compiler->currentLineNumber());
+	$$= result;
+     }
+    |
+/*
+  TRY_KW
+     {
+	compiler->pushLineNumber();
+     }
+    Block
+*/
+    TryHeadStatement Finally
+    {
+	JCGuardStat *result;
+	result= new JCGuardStat;
+	result->setSubCategory(TRYFINAL_GUARD);
+	result->setGuardedBlock($1);
+	result->setMandatoryBlock($2);
+	result->setLineRange(compiler->popLineNumber(), compiler->currentLineNumber());
+	$$= result;
+     }
+    |  TryHeadStatement Catches
+    {
+	JCGuardStat *result;
+	result= new JCGuardStat;
+	result->setSubCategory(TRYCATCH_GUARD);
+	result->setGuardedBlock($1);
+	result->setHandlingBlocks($2);
+	result->setLineRange(compiler->popLineNumber(), compiler->currentLineNumber());
+	$$= result;
+     }
+    |  TryHeadStatement Catches Finally
+    {
+	JCGuardStat *result;
+	result= new JCGuardStat;
+	result->setSubCategory(TRYFULL_GUARD);
+	result->setGuardedBlock($1);
+	result->setHandlingBlocks($2);
+	result->setMandatoryBlock($3);
+	result->setLineRange(compiler->popLineNumber(), compiler->currentLineNumber());
+	$$= result;
+     }
+
+
+Catches:
+    Catch
+    {
+	$$= $1;
+     }
+    |  Catches Catch
+    {
+	$1->link($2);
+	$$= $1;
+     }
+
+Catch:
+/* ATTENTION: Mis Parameter a la place de Argument (qui n'existe pas). */
+    CATCH_KW
+     {
+	compiler->pushLineNumber();
+     }
+    '(' Parameter ')' Block
+    {
+	JCHandlingBlock *result;
+	result= new JCHandlingBlock;
+	result->setTrap($4);
+	result->setHandler($6);
+	result->setLineRange(compiler->popLineNumber(), compiler->currentLineNumber());
+	$$= result;
+     }
+
+
+Finally:
+    FINALLY_KW Block
+    {
+	$$= $2;
+     }
+
+
+/* Expressions. */
+
+Expression.Opt:
+    /* Optional. */
+    {
+	JCExpression *result= new JCExpression;
+	$$= result;
+     }
+    |  Expression
+    {
+	$$= $1;
+     }
+
+
+Expression:
+/* ATTENTION: 'Expression' could be simplified to 'AssignmentExpression'. */
+    AssignmentExpression
+    {
+	$$= $1;
+     }
+
+
+FieldAccess:
+    PrimaryExpression '.' Identifier
+    {
+	JCFieldAccess *result;
+	result= new JCFieldAccess;
+	result->setSubExpression($1);
+	result->setName($3);
+	result->bindInLocalSpace(thePackage->getBottomNameSpace());
+	$$= result;
+     }
+
+
+
+ComplexPrimary:
+/* TEST-960614 [HD]: Inverse l'ordre d'apparition de FieldAccess (apres ArrayAccess). */
+/* MOD-961201 [HD]: Ajoute ParenthisedName: ajoute 1 s/r, mais corrige le probleme de casting. */
+    FieldAccess
+    {
+	$$= $1;
+     }
+    | Literal
+    {
+	$$= $1;	
+     }
+    |  ArrayAccess
+    {
+	$$= $1;	
+     }
+    |  MethodCall
+    {
+	$$= $1;	
+     }
+    | ParenthisedName
+    {
+	if ($1->isComposed()) {
+	    JCFieldAccess *result= new JCFieldAccess;
+	    result->setName($1);
+	    result->bindInLocalSpace(thePackage->getBottomNameSpace());
+	    $$= result;
+	  }
+	 else {
+	    JCVarAccess *result= new JCVarAccess();
+	    result->setVarName($1);
+	    result->bindInLocalSpace(thePackage->getBottomNameSpace());
+	    $$= result;
+	 }
+     }
+    | '(' Expression ')'
+    {
+/*
+MOD-961214 [HD]: Trying to live without blocked expression.
+	JCBlockExpr *result;
+	result= new JCBlockExpr;
+	result->setInternal($2);
+	$$= result;
+*/
+	$$= $2;
+    }
+
+
+ParenthisedName:
+    '(' Name ')'
+    {
+	$$= $2;
+    }
+
+
+NotJustName:
+/* TEST-960614 [HD]: Inverse l'ordre d'apparition. */
+   ComplexPrimary
+    {
+	$$= $1;
+     }
+    |   AllocationExpression
+    {
+	$$= $1;
+     }
+
+
+PrimaryExpression:
+/* TEST-960614 [HD]: Remplace le 'Name' avec un 'Ident' pour essayer d'avoir acces au FieldAcces: genere 3 reduce/reduce, empeche les constructeurs. */
+    Name
+    {
+	if ($1->isComposed()) {
+	    JCFieldAccess *result= new JCFieldAccess;
+	    result->setName($1);
+	    result->bindInLocalSpace(thePackage->getBottomNameSpace());
+	    $$= result;
+	  }
+	 else {
+	    if ($1->isReserved() && $1->getSpecialName() == JCIdentifier::snNull) {
+		JCCteExpr *result= new JCCteExpr(JCReferencedType::popNullObject);
+		$$= result;
+	    }
+	    else {
+		JCVarAccess *result= new JCVarAccess();
+		result->setVarName($1);
+		result->bindInLocalSpace(thePackage->getBottomNameSpace());
+		$$= result;
+	    }
+	 }
+     }
+   |  NotJustName
+    {
+	$$= $1;
+     }
+
+
+QualifiedName:
+    Identifier
+    {
+	$$= $1;
+     }
+    |  QualifiedName '.' Identifier
+    {
+	$1->addComponent($3);
+	$$= $1;
+     }
+
+Name:
+    QualifiedName
+    {
+	$$= $1;
+     }
+    |  THIS_KW
+    {
+	JCIdentifier *result;
+	result= new JCIdentifier;
+	result->resolveToSelf();
+	$$= result;
+     }
+    |  SUPER_KW
+    {
+	JCIdentifier *result;
+	result= new JCIdentifier;
+	result->resolveToSuper();
+	$$= result;
+     }
+    |  NULL_KW
+    {
+	JCIdentifier *result;
+	result= new JCIdentifier;
+	result->resolveToNull();
+	$$= result;
+     }
+
+NameArrayStart:
+    Name '['
+    {
+	$$= $1;
+    }
+
+
+TypeName:
+/* TEST-960614 [HD]: Essaie de resoudre les shift/reduce conflicts, remplace
+	QualifiedName par Name.
+*/
+    Name
+    {
+	$$= $1;
+     }
+    /* ATTENTION: Should contain also 'TypeKeyword'. */
+
+
+ArrayAccess:
+    NameArrayStart Expression ']'
+    {
+	JCArrayAccess *result;
+	result= new JCArrayAccess;
+	if ($1->isReserved()) {
+	    compiler->addError("Can't use this or super in an array access");
+	}
+	else {
+	    result->setName($1);
+	    result->addDimensionOffset($2);
+	    result->bindInLocalSpace(thePackage->getBottomNameSpace());
+	}
+	$$= result;
+     }
+    |  ComplexPrimary '[' Expression ']'
+    {
+	JCArrayAccess *result;
+
+	if ($1->getCategory() == JCExpression::eArray) {
+	    if (((JCArrayAccess *)$1)->addDimensionOffset($3)) {
+		compiler->addError("field does not have so many dimensions");
+		// RETURN non-fatal error.
+	     }
+	    result= (JCArrayAccess *)$1;
+	 }
+	else {
+	    result= new JCArrayAccess;
+	    result->setSubExpression($1);
+	    result->addDimensionOffset($3);
+	    /* ATTN: Is there any need to do a binding in this case ?
+		result->bindInLocalSpace(thePackage->getBottomNameSpace());
+	    */
+	 }
+	$$= result;
+     }
+
+
+/* Method Calls. */
+
+MethodCall:
+    MethodAccess '(' ArgumentList.Opt ')'
+    {
+	((JCInvokeExpr *)$1)->setArguments($3);
+	$$= $1;
+     }
+
+
+MethodAccess:
+    Name
+    {
+	JCInvokeExpr *result;
+	result= new JCInvokeExpr;
+	result->setName($1);
+	result->bindInLocalSpace(thePackage->getBottomNameSpace());
+	$$= result;
+     }
+    |  PrimaryExpression '.' Identifier
+    {
+	JCInvokeExpr *result;
+	result= new JCInvokeExpr;
+	result->setName($3);
+	result->setSubExpression($1);
+	result->bindInLocalSpace(thePackage->getBottomNameSpace());
+	$$= result;
+     }
+
+
+ArgumentList.Opt:
+    /* Optional. */
+    {
+	$$= NULL;
+     }
+    | ArgumentList
+    {
+	$$= $1;
+     }
+
+ArgumentList:
+    Expression
+    {
+	$$= $1;
+     }
+    |  ArgumentList ',' Expression
+    {
+	$1->linkExpression($3);
+	$$= $1;
+     }
+
+
+/* Allocation Expressions. */
+AllocationExpression:
+    NEW_KW NonArrayType '(' ArgumentList.Opt ')'
+    {
+	if ($2->isPrimitive()) {
+	    JCExpression *result= new JCExpression;    // TMP: Simplify the error management at higher levels.
+
+	    compiler->addError("It is illegal to create a single primitive instance");
+	    $$= result;
+	}
+	else {
+	    JCAllocExpr *result;
+
+	    result= new JCAllocExpr;
+	    result->setType($2);
+	    if (!thePackage->bind($2->getTypeName(), $2)) {
+		thePackage->addUnknown($2);
+	    }
+	    result->setArguments($4);
+	    $$= result;
+	}
+     }
+    | NEW_KW NonArrayType DimExpressions Dims.Opt
+    {
+	JCAllocExpr *result;
+	JCReferencedType *arrayType;
+
+	result= new JCAllocExpr();
+
+	if (!$2->isPrimitive()) {
+	    if (!thePackage->bind($2->getTypeName(), $2)) {
+		thePackage->addUnknown($2);
+	    }
+	}
+	result->setArrayType($2, $3, $4);
+	$$= result;
+     }
+
+
+DimExpressions:
+    DimExpression
+    {
+	$$= $1;
+     }
+    |  DimExpressions DimExpression
+    {
+	$1->linkExpression($2);
+	$$= $1;
+     }
+
+DimExpression:
+    '[' Expression ']'
+    {
+	$$= $2;
+     }
+
+
+Dims.Opt:
+    {
+	$$= 0;
+     }
+    |  Dims
+    {
+	$$= $1;
+     }
+
+Dims:
+    '[' ']'
+    {
+	$$= 1;
+     }
+    |  Dims '[' ']'
+    {
+	$$= ($1 + 1);
+     }
+
+
+/* Postfix Expressions. */
+
+PostfixExpression:
+    PrimaryExpression
+    {
+	$$= $1;
+     }
+    |  PostIncrement
+    {
+	$$= $1;
+     }
+    |  PostDecrement
+    {
+	$$= $1;
+     }
+
+
+PostIncrement:
+    PrimaryExpression ICR_KW
+    {
+	JCOperExpr *result;
+	result= new JCOperExpr;
+	result->setOperator(POSTINCR_OPER);
+	result->setRightOperand($1);
+	$$= result;
+     }
+
+PostDecrement:
+    PrimaryExpression DECR_KW
+    {
+	JCOperExpr *result;
+	result= new JCOperExpr;
+	result->setOperator(POSTDECR_OPER);
+	result->setRightOperand($1);
+	$$= result;
+     }
+
+UnaryExpression:
+    PreIncrement
+    {
+	$$= $1;
+     }
+    |  PreDecrement
+    {
+	$$= $1;
+     }
+    |  '+' UnaryExpression
+    {
+	JCOperExpr *result;
+	result= new JCOperExpr;
+	result->setOperator(POSATE_OPER);
+	result->setRightOperand($2);
+	$$= result;
+     }
+    |  '-' UnaryExpression
+    {
+	if ($2->getCategory() == JCExpression::eConstant) {
+	    JCCteExpr *tmpExpr= (JCCteExpr *)$2;
+	    JCReferencedType *cteType= tmpExpr->getFinalType();
+	    if (cteType->isArithmetic()) {
+		tmpExpr->negate();
+		$$= tmpExpr;
+	    }
+	    else {
+		    // We let the opcode do the conversion.  ATTN: Maybe we have to declare a
+		    // type error here ? Or insert a type cast ?
+		JCOperExpr *result;
+    
+		result= new JCOperExpr;
+		result->setOperator(NEGATE_OPER);
+		result->setRightOperand($2);
+		$$= result;
+	    }
+	}
+	else {
+	    JCOperExpr *result;
+
+	    result= new JCOperExpr;
+	    result->setOperator(NEGATE_OPER);
+	    result->setRightOperand($2);
+	    $$= result;
+	}
+     }
+    |  UnaryExpressionNotPlusMinus
+    {
+	$$= $1;
+     }
+
+PreIncrement:
+    ICR_KW PrimaryExpression
+    {
+	JCOperExpr *result;
+	result= new JCOperExpr;
+	result->setOperator(PREINCR_OPER);
+	result->setRightOperand($2);
+	$$= result;
+     }
+
+PreDecrement:
+    DECR_KW PrimaryExpression
+    {
+	JCOperExpr *result;
+	result= new JCOperExpr;
+	result->setOperator(PREDECR_OPER);
+	result->setRightOperand($2);
+	$$= result;
+     }
+
+UnaryExpressionNotPlusMinus:
+    PostfixExpression
+    {
+	$$= $1;
+     }
+    |  '~' UnaryExpression
+    {
+	JCOperExpr *result;
+	result= new JCOperExpr;
+	result->setOperator(BITFLIP_OPER);
+	result->setRightOperand($2);
+	$$= result;
+     }
+    |  '!' UnaryExpression
+    {
+	JCOperExpr *result;
+	result= new JCOperExpr;
+	result->setOperator(NOT_OPER);
+	result->setRightOperand($2);
+	$$= result;
+     }
+    | CastExpression
+    {
+	$$= $1;
+     }
+
+
+MultiplicativeExpression:
+    UnaryExpression
+    {
+	$$= $1;
+     }
+    |  MultiplicativeExpression '*' UnaryExpression
+    {
+	JCOperExpr *result;
+	result= new JCOperExpr;
+	result->setOperator(MULTIPLY_OPER);
+	result->setLeftOperand($1);
+	result->setRightOperand($3);
+	$$= result;
+     }
+    |  MultiplicativeExpression '/' UnaryExpression
+    {
+	JCOperExpr *result;
+	result= new JCOperExpr;
+	result->setOperator(DIVIDE_OPER);
+	result->setLeftOperand($1);
+	result->setRightOperand($3);
+	$$= result;
+     }
+    |  MultiplicativeExpression '%' UnaryExpression
+    {
+	JCOperExpr *result;
+	result= new JCOperExpr;
+	result->setOperator(MODULO_OPER);
+	result->setLeftOperand($1);
+	result->setRightOperand($3);
+	$$= result;
+     }
+
+AdditiveExpression:
+    MultiplicativeExpression
+    {
+	$$= $1;
+     }
+    |  AdditiveExpression '+' MultiplicativeExpression
+    {
+	JCOperExpr *result;
+	result= new JCOperExpr;
+	result->setOperator(ADD_OPER);
+	result->setLeftOperand($1);
+	result->setRightOperand($3);
+	$$= result;
+     }
+    |  AdditiveExpression '-' MultiplicativeExpression
+    {
+	JCOperExpr *result;
+	result= new JCOperExpr;
+	result->setOperator(SUBST_OPER);
+	result->setLeftOperand($1);
+	result->setRightOperand($3);
+	$$= result;
+     }
+
+ShiftExpression:
+    AdditiveExpression
+    {
+	$$= $1;
+     }
+    |  ShiftExpression LS_KW AdditiveExpression
+    {
+	JCOperExpr *result;
+	result= new JCOperExpr;
+	result->setOperator(LS_OPER);
+	result->setLeftOperand($1);
+	result->setRightOperand($3);
+	$$= result;
+     }
+    |  ShiftExpression RS_KW AdditiveExpression
+    {
+	JCOperExpr *result;
+	result= new JCOperExpr;
+	result->setOperator(RS_OPER);
+	result->setLeftOperand($1);
+	result->setRightOperand($3);
+	$$= result;
+     }
+    |  ShiftExpression URS_KW AdditiveExpression
+    {
+	JCOperExpr *result;
+	result= new JCOperExpr;
+	result->setOperator(URS_OPER);
+	result->setLeftOperand($1);
+	result->setRightOperand($3);
+	$$= result;
+     }
+
+RelationalExpression:
+    ShiftExpression
+    {
+	$$= $1;
+     }
+    |  RelationalExpression '<' ShiftExpression
+    {
+	JCOperExpr *result;
+	result= new JCOperExpr;
+	result->setOperator(LT_OPER);
+	result->setLeftOperand($1);
+	result->setRightOperand($3);
+	$$= result;
+     }
+    |  RelationalExpression '>' ShiftExpression
+    {
+	JCOperExpr *result;
+	result= new JCOperExpr;
+	result->setOperator(GT_OPER);
+	result->setLeftOperand($1);
+	result->setRightOperand($3);
+	$$= result;
+     }
+    |  RelationalExpression GE_KW ShiftExpression
+    {
+	JCOperExpr *result;
+	result= new JCOperExpr;
+	result->setOperator(GE_OPER);
+	result->setLeftOperand($1);
+	result->setRightOperand($3);
+	$$= result;
+     }
+    |  RelationalExpression LE_KW ShiftExpression
+    {
+	JCOperExpr *result;
+	result= new JCOperExpr;
+	result->setOperator(LE_OPER);
+	result->setLeftOperand($1);
+	result->setRightOperand($3);
+	$$= result;
+     }
+    |  RelationalExpression INSTANCEOF_KW TypeName Dims.Opt
+    {
+	JCCastExpr *result;
+	JCReferencedType *tmpType;
+
+	tmpType= new JCReferencedType;
+	tmpType->setTypeName($3);
+	tmpType->setKind(TYPE_CLASS);
+	if (!thePackage->bind($3, tmpType)) {
+	    thePackage->addUnknown(tmpType);
+	 }
+	if ($4 != 0) {
+	    JCReferencedType *arrayType;
+
+	    arrayType= new JCReferencedType;
+	    tmpType->setKind(TYPE_ARRAY);
+	    arrayType->setOfReferencedType(tmpType);
+	    arrayType->setNbrDimensions($4);
+	    tmpType= arrayType;
+	}
+	result= new JCCastExpr;
+	result->setOperator(ISA_OPER);
+	result->setRightOperand($1);
+	result->setTypeMember(tmpType);
+
+	$$= result;
+     }
+
+EqualityExpression:
+    RelationalExpression
+    {
+	$$= $1;
+     }
+    |  EqualityExpression EQ_KW RelationalExpression
+    {
+	JCOperExpr *result;
+	result= new JCOperExpr;
+	result->setOperator(EQ_OPER);
+	result->setLeftOperand($1);
+	result->setRightOperand($3);
+	$$= result;
+     }
+    |  EqualityExpression NE_KW RelationalExpression
+    {
+	JCOperExpr *result;
+	result= new JCOperExpr;
+	result->setOperator(NE_OPER);
+	result->setLeftOperand($1);
+	result->setRightOperand($3);
+	$$= result;
+     }
+
+AndExpression:
+    EqualityExpression
+    {
+	$$= $1;
+     }
+    |  AndExpression '&' EqualityExpression
+    {
+	JCOperExpr *result;
+	result= new JCOperExpr;
+	result->setOperator(AND_OPER);
+	result->setLeftOperand($1);
+	result->setRightOperand($3);
+	$$= result;
+     }
+
+ExclusiveOrExpression:
+    AndExpression
+    {
+	$$= $1;
+     }
+    |  ExclusiveOrExpression '^' AndExpression
+    {
+	JCOperExpr *result;
+	result= new JCOperExpr;
+	result->setOperator(XOR_OPER);
+	result->setLeftOperand($1);
+	result->setRightOperand($3);
+	$$= result;
+     }
+
+InclusiveOrExpression:
+    ExclusiveOrExpression
+    {
+	$$= $1;
+     }
+    |  InclusiveOrExpression '|' ExclusiveOrExpression
+    {
+	JCOperExpr *result;
+	result= new JCOperExpr;
+	result->setOperator(OR_OPER);
+	result->setLeftOperand($1);
+	result->setRightOperand($3);
+	$$= result;
+     }
+
+ConditionalAndExpression:
+    InclusiveOrExpression
+    {
+	$$= $1;
+     }
+    |  ConditionalAndExpression ANDAND_KW InclusiveOrExpression
+    {
+	JCOperExpr *result;
+	result= new JCOperExpr;
+	result->setOperator(ANDAND_OPER);
+	result->setLeftOperand($1);
+	result->setRightOperand($3);
+	$$= result;
+     }
+
+ConditionalOrExpression:
+    ConditionalAndExpression
+    {
+	$$= $1;
+     }
+    |  ConditionalOrExpression OROR_KW ConditionalAndExpression
+    {
+	JCOperExpr *result;
+	result= new JCOperExpr;
+	result->setOperator(OROR_OPER);
+	result->setLeftOperand($1);
+	result->setRightOperand($3);
+	$$= result;
+     }
+
+
+ConditionalExpression:
+    ConditionalOrExpression
+    {
+	$$= $1;
+     }
+    |  ConditionalOrExpression '?' Expression ':' ConditionalExpression
+    {
+	JCCondExpr *result;
+	result= new JCCondExpr;
+	result->setCondition($1);
+	result->setExprOnTrue($3);
+	result->setExprOnFalse($5);
+	$$= result;
+     }
+
+
+AssignmentExpression:
+    ConditionalExpression
+    {
+	$$= $1;
+     }
+    |  Assignment
+    {
+	$$= $1;
+     }
+
+Assignment:
+    UnaryExpression AssignmentOperator AssignmentExpression
+    {
+	JCAssignExpr *result;
+	result= new JCAssignExpr;
+	result->setLeftOperand($1);
+	result->setRightOperand($3);
+	result->setOperator($2);
+	$$= result;
+     }
+
+
+CastExpression:
+/* TEST-960613 [HD]: Remplace l'original, pour resoudre les conflits
+		 dans les CastExpresssion et ArrayAccess.
+    '(' TypeName ')' UnaryExpressionNotPlusMinus
+    TEST-960614 [HD]: Remplace le 'QualifiedName' par 'Name', pour resoudre un s/r.
+    TEST-961201 [HD]: Remplace le QualifiedName par un ParenthisedName: enleve 3 s/r.
+    '(' QualifiedName ')' UnaryExpressionNotPlusMinus
+*/
+    ParenthisedName UnaryExpressionNotPlusMinus
+    {
+	JCCastExpr *result;
+	JCReferencedType *tmpType;
+
+	tmpType= new JCReferencedType;
+	tmpType->setTypeName($1);
+	if (!thePackage->bind($1, tmpType)) {
+	    thePackage->addUnknown(tmpType);
+	 }
+	result= new JCCastExpr;
+	result->setRightOperand($2);
+	result->setTypeMember(tmpType);
+	$$= result;
+     }
+    |  '(' PrimitiveType ')' UnaryExpression
+    {
+	JCCastExpr *result;
+	JCReferencedType *tmpType;
+
+	tmpType= new JCReferencedType;
+	tmpType->setOfPrimitiveType($2);
+	result= new JCCastExpr;
+	result->setRightOperand($4);
+	result->setTypeMember(tmpType);
+	$$= result;
+     }
+
+
+AssignmentOperator:
+    '='
+    {
+	$$= SIMPLEASS_OPER;
+     }
+    |  PLUSASSIGN_KW
+    {
+	$$= PLUSASS_OPER;
+     }
+    |  MINUSASSIGN_KW
+    {
+	$$= MINUSASS_OPER;
+     }
+    |  TIMEASSIGN_KW
+    {
+	$$= TIMEASS_OPER;
+     }
+    |  DIVIDEASSIGN_KW
+    {
+	$$= DIVIDEASS_OPER;
+     }
+    |  ANDASSIGN_KW
+    {
+	$$= ANDASS_OPER;
+     }
+    |  ORASSIGN_KW
+    {
+	$$= ORASS_OPER;
+     }
+    |  NOTASSIGN_KW
+    {
+	$$= NOTASS_OPER;
+     }
+    |  MODASSIGN_KW
+    {
+	$$= MODASS_OPER;
+     }
+    |  LSASSIGN_KW
+    {
+	$$= LSASS_OPER;
+     }
+    |  RSASSIGN_KW
+    {
+	$$= RSASS_OPER;
+     }
+    |  URSASSIGN_KW
+    {
+	$$= URSASS_OPER;
+     }
+
+
+IdentifierOpt:
+    /* Optional. */
+    {
+	$$= NULL;
+     }
+    |  Identifier
+    {
+	$$= $1;
+     }
+
+
+Identifier:
+    IDENTIFIER_KW
+    {
+	JCIdentifier *result;
+	JCCteUtf8 *name;
+
+	name= JCCteUtf8::addUniqueInstance($1);
+	result= new JCIdentifier(name);
+	$$= result;
+     }
+
+
+Type:
+    NonArrayType
+    {
+	$$= $1;
+     }
+    |  ArrayType
+    {
+	$$= $1;
+     }
+
+
+NonArrayType:
+    PrimitiveType
+    {
+	JCReferencedType *result;
+	result= new JCReferencedType;
+	result->setKind(TYPE_BASIC);
+	result->setOfPrimitiveType($1);
+	$$= result;
+     }
+    | TypeName
+    {
+	JCReferencedType *result;
+	result= new JCReferencedType;
+	result->setKind(TYPE_CLASS);
+	result->setTypeName($1);
+	$$= result;
+     }
+
+
+PrimitiveType:
+    BOOLEAN_KW
+    {
+	$$= JVM_TYPE_BOOLEAN;
+     }
+    |  CHAR_KW
+    {
+	$$= JVM_TYPE_CHAR;
+     }
+    |  BYTE_KW
+    {
+	$$= JVM_TYPE_SIGNED_BYTE;
+     }
+    |  SHORT_KW
+    {
+	$$= JVM_TYPE_UNSIGNED_SHORT;
+     }
+    |  INT_KW
+    {
+	$$= JVM_TYPE_INTEGER;
+     }
+    |  FLOAT_KW
+    {
+	$$= JVM_TYPE_FLOAT;
+     }
+    |  DOUBLE_KW
+    {
+	$$= JVM_TYPE_DOUBLE;
+     }
+    | LONG_KW
+    {
+	$$= JVM_TYPE_LONG;
+     }
+
+
+ArrayType:
+    PrimitiveType '[' ']'
+    {
+	JCReferencedType *result, *tmpType;
+
+	result= new JCReferencedType();
+	    // ATTN: Must review the way primitive array types are plugged within array types.
+	result->setOfPrimitiveType($1);
+	result->setKind(TYPE_ARRAY);
+	result->incrementNbrDimensions();
+	$$= result;
+     }
+    | NameArrayStart ']'
+    {
+	JCReferencedType *result, *tmpType;
+	tmpType= new JCReferencedType;
+	tmpType->setKind(TYPE_CLASS);
+	tmpType->setTypeName($1);
+
+	result= new JCReferencedType;
+	result->setKind(TYPE_ARRAY);
+	result->setOfReferencedType(tmpType);
+	result->incrementNbrDimensions();
+	$$= result;
+     }
+    | ArrayType '[' ']'
+    {
+	$1->incrementNbrDimensions();
+     }
+
+
+Literal:
+    LITERAL_BOOLEAN
+    {
+	JCCteExpr *constant;
+	constant= new JCCteExpr(JCReferencedType::popChar);
+	constant->setBoolValue($1);
+	$$= (JCExpression *)constant;
+     }
+    |  LITERAL_CHAR
+    {
+	JCCteExpr *constant;
+	constant= new JCCteExpr(JCReferencedType::popChar);
+	constant->setCharValue($1);
+	$$= (JCExpression *)constant;
+     }
+    |  LITERAL_FLOAT
+    {
+	JCCteExpr *constant;
+
+	constant= new JCCteExpr(JCReferencedType::popFloat);
+	if ($1 == 0.0) {
+	    constant->setFloatZero();
+	}
+/* This never happens at this level.
+	else if ($1 == -1.0) {
+	    constant->setFloatMinusOne();
+	}
+*/
+	else if ($1 == 1.0) {
+	    constant->setFloatOne();
+	}
+	else {
+	    constant->setFloatValue($1);
+	}
+	$$= (JCExpression *)constant;
+     }
+    |  LITERAL_INT
+    {
+	JCCteExpr *constant;
+
+	constant= new JCCteExpr(JCReferencedType::popInteger);
+	if ($1 == 0) {
+	    constant->setIntZero();
+	}
+/* This never happen at this level.
+	else if ($1 ==  -1) {
+	    constant->setIntMinusOne();
+	}
+*/
+	else if ($1 == 1) {
+	    constant->setIntOne();
+	}
+	else {
+	    constant->setIntValue($1);
+	}
+	$$= (JCExpression *)constant;
+     }
+    |  LITERAL_STRING
+    {
+	JCCteExpr *constant;
+	constant= new JCCteExpr(JCReferencedType::popString);
+	constant->setStringValue($1);
+	$$= (JCExpression *)constant;
+     }
+    |  LITERAL_LONG
+    {
+	JCCteExpr *constant;
+	unsigned int *aValue= (unsigned int *)$1;
+
+	constant= new JCCteExpr(JCReferencedType::popLong);
+	if ((aValue[0] == 0) && (aValue[1] == 0)) {
+	    constant->setLongZero();
+	}
+/* This never happen at this level.
+	else if ((aValue[0] == 0xFFFFFFFF) && (aValue[1] == 0xFFFFFFFF)) {
+	    constant->setLongMinusOne();
+	}
+*/
+	else if ((aValue[1] == 0) && (aValue[0] == 1)) {
+	    constant->setLongOne();
+	}
+	else {
+	    constant->setLongValue((unsigned int *)$1);
+	}
+	$$= (JCExpression *)constant;
+     }
+    |  LITERAL_DOUBLE
+    {
+	JCCteExpr *constant;
+
+	constant= new JCCteExpr(JCReferencedType::popDouble);
+	if ($1 == 0.0) {
+	    constant->setDoubleZero();
+	}
+/* This never happen at this level.
+	else if ($1 == -1.0) {
+	    constant->setDoubleMinusOne();
+	}
+*/
+	else if ($1 == 1.0) {
+	    constant->setDoubleOne();
+	}
+	else {
+	    constant->setDoubleValue($1);
+	}
+	$$= (JCExpression *)constant;
+     }
+
+
+/*************************************
+* MODIFIERS (fields, methods, constructors).
+**************************************/
+
+ConstructorModifiers:
+    ConstructorModifier
+    {
+	$$= $1;
+     }
+    |  ConstructorModifiers ConstructorModifier
+    {
+	$$= ($1 | $2);
+     }
+
+/* ATTENTION: Sensible au contexte. */
+
+ConstructorModifier:
+    PROTECTED_KW
+    {
+	$$= ACC_PROTECTED;
+     }
+    |  PRIVATE_KW
+    {
+	$$= ACC_PRIVATE;
+     }
+    |  PUBLIC_KW
+    {
+	$$= ACC_PUBLIC;
+     }
+
+
+ClassModifiers:
+    ClassModifier
+    {
+	$$= $1;
+     }
+    |  ClassModifiers ClassModifier
+    {
+	$$= ($1 | $2);
+     }
+
+ClassModifier:
+    ABSTRACT_KW
+    {
+	$$= ACC_ABSTRACT;
+    }
+    |  SubCategory1
+    {
+	$$= $1;
+     }
+
+
+MethodModifiers.Opt:
+    {
+	thePackage->setCurrentModifiers(0);
+	$$= 0;
+     }
+    | MethodModifiers
+    {
+	thePackage->setCurrentModifiers($1);
+	$$= $1;
+     }
+
+MethodModifiers:
+    MethodModifier
+    {
+	$$= $1;
+     }
+    |  MethodModifiers MethodModifier
+    {
+	$$= ($1 | $2);
+     }
+
+
+MethodModifier:
+    ABSTRACT_KW
+    {
+	$$= ACC_ABSTRACT;
+     }
+    | NATIVE_KW
+    {
+	$$= ACC_NATIVE;
+     }
+    | SYNCHRONIZED_KW
+    {
+	$$= ACC_SYNCHRONIZED;
+     }
+    | TRANSIENT_KW
+    {
+	$$= ACC_TRANSIENT;
+     }
+    | VOLATILE_KW
+    {
+	$$= ACC_VOLATILE;
+     }
+    | SubCategory2
+    {
+	$$= $1;
+     }
+
+
+SubCategory2:
+    PROTECTED_KW
+    {
+	$$= ACC_PROTECTED;
+     }
+    |  PRIVATE_KW
+    {
+	$$= ACC_PRIVATE;
+     }
+    |  STATIC_KW
+    {
+	$$= ACC_STATIC;
+     }
+    | SubCategory1
+    {
+	$$= $1;
+     }
+
+
+SubCategory1:
+    FINAL_KW
+    {
+	$$= ACC_FINAL;
+     }
+    |  PUBLIC_KW
+    {
+	$$= ACC_PUBLIC;
+     }
+
+/*** Extension PLZEN. ***/
+
+StateMember:
+    StateDeclarator StateBody
+    {
+	((JCState *)$1)->setLineRange(compiler->popLineNumber(), compiler->currentLineNumber());
+    }
+    TimeInfo.Opt
+    {
+	((JCState *)$1)->setBody($2);
+	// ATTN: Must take care also of the TimeInfo.
+	$$= $1;
+    }
+
+
+StateDeclarator:
+    STATE_KW
+    {
+	compiler->pushLineNumber();
+    }
+    Identifier '(' ParameterList.Opt ')'
+    {
+	JCState *result;
+	JCDimIdentifier *stateName;
+
+
+	stateName= new JCDimIdentifier;
+
+	if (thePackage->getCurrentType()->getName()->isMatching($3)) {
+	    JCCteUtf8 *aCteName= JCCteUtf8::getWellKnownName(JCCteUtf8::pinitIdent);
+	    JCIdentifier *tmpIdent= new JCIdentifier(aCteName);
+	    stateName->setName(tmpIdent);
+	}
+	else {
+	    stateName->setName($3);
+	}
+
+	result= new JCState;
+	result->setName(stateName);
+	result->setParameters($5);
+	$$= result;
+    }
+
+
+StateBody:
+    StateBlock
+    {
+	$$= $1;
+     }
+
+StateBlock:
+    '{' 
+    {
+	compiler->pushLineNumber();
+	thePackage->pushNameSpace();
+     }
+    LocalVarDecAndStateStatements StateTransitions.Opt '}'
+    {
+	JCStateActionBlock *result;
+	result= new JCStateActionBlock;
+
+	result->setContent($3);
+	result->setTransitions($4);
+	result->setNameSpace(thePackage->popNameSpace());
+	result->setLineRange(compiler->popLineNumber(), compiler->currentLineNumber());
+	$$= result;
+     }
+    | '{' 
+    {
+	compiler->pushLineNumber();
+	thePackage->pushNameSpace();
+     }
+    StateTransitions '}'
+    {
+	JCStateActionBlock *result;
+	result= new JCStateActionBlock;
+
+	result->setContent(NULL);
+	result->setTransitions($3);
+	result->setNameSpace(thePackage->popNameSpace());
+	result->setLineRange(compiler->popLineNumber(), compiler->currentLineNumber());
+	$$= result;
+     }
+    | '{'
+     {
+	compiler->pushLineNumber();
+     }
+    '}'
+    {
+	JCActionBlock *result;
+	result= new JCActionBlock;
+	result->setLineRange(compiler->popLineNumber(), compiler->currentLineNumber());
+	$$= result;
+     }
+
+
+LocalVarDecAndStateStatements:
+    LocalVarDecOrStateStatement
+    {
+	$$= $1;
+    }
+    | LocalVarDecAndStateStatements LocalVarDecOrStateStatement
+    {
+	$1->link($2);
+	$$= $1;
+    }
+
+LocalVarDecOrStateStatement:
+    LocalVariableDeclarationStatement
+    {
+	$$= $1;
+    }
+    | StateStatement
+    {
+	$$= $1;
+    }
+
+
+StateStatement:
+    Statement TimeInfo.Opt
+    {
+	$$= $1;
+    }
+
+CriticalStatement:
+    CRITICAL_KW
+     {
+	compiler->pushLineNumber();
+     }
+    '(' ArgumentList.Opt ')' Statement
+    {
+	JCGuardStat *result;
+	result= new JCGuardStat;
+	result->setSubCategory(CRITICAL_GUARD);
+	result->setSubExpression($4);	// ATTN: Must resolve to an object (including array).
+	result->setSubStatement($6);
+	result->setLineRange(compiler->popLineNumber(), compiler->currentLineNumber());
+	$$= result;
+    }
+
+
+FireStatement:
+    FIRE_KW
+     {
+	compiler->pushLineNumber();
+     }
+    QualifiedName FireDestination.Opt ';'
+    {
+	JCFireStat *result;
+
+	result= new JCFireStat();
+
+	if ($3->isComposed()) {
+	    JCFieldAccess *anIdent;
+
+	    anIdent= new JCFieldAccess();
+	    anIdent->setName($3);
+	    anIdent->bindInLocalSpace(thePackage->getBottomNameSpace());
+	    result->setEvent(anIdent);
+	  }
+	 else {
+	    JCVarAccess *anIdent;
+	    anIdent= new JCVarAccess();
+	    anIdent->setVarName($3);
+	    anIdent->bindInLocalSpace(thePackage->getBottomNameSpace());
+	    result->setEvent(anIdent);
+	 }
+
+	if ($4 != NULL) {
+	    if ($4->isComposed()) {
+		JCFieldAccess *anIdent;
+    
+		anIdent= new JCFieldAccess();
+		anIdent->setName($4);
+		anIdent->bindInLocalSpace(thePackage->getBottomNameSpace());
+		result->setDestination(anIdent);
+	    }
+	    else {
+		JCVarAccess *anIdent;
+		anIdent= new JCVarAccess();
+		anIdent->setVarName($4);
+		anIdent->bindInLocalSpace(thePackage->getBottomNameSpace());
+		result->setDestination(anIdent);
+	    }
+	}
+	else {
+		// TODO: Check if in a static method : illegal.
+	}
+	result->setLineRange(compiler->popLineNumber(), compiler->currentLineNumber());
+	$$= result;
+    }
+
+FireDestination.Opt:
+	/* Optional. */
+    {
+	$$= NULL;
+    }
+    | ON_KW QualifiedName
+    {
+	$$= $2;
+    }
+
+
+StateTransitions.Opt:
+	/* Optional. */
+    {
+	$$= new TransitionList();
+    }
+    | StateTransitions
+    {
+	$$= $1;
+    }
+
+
+StateTransitions:
+  StateTransition
+    {
+	$$= new TransitionList();
+	$$->addObject($1);
+    }
+  |  StateTransitions StateTransition
+    {
+	$$= $1;
+	$$->addObject($2);
+    }
+
+
+StateTransition:
+    TransitionModifiers.Opt TRANSITION_KW
+     {
+	compiler->pushLineNumber();
+     }
+    PureStateTransition ';'
+    {
+	$4->setLineRange(compiler->popLineNumber(), compiler->currentLineNumber());
+	$4->setModifiers($1);
+	$$= $4;
+    }
+
+
+PureStateTransition:
+    QualifiedName ':' TransitionSkip
+    {
+	JCTransition *result;
+	result= new JCTransition();
+
+	if ($1->isComposed()) {
+	    JCFieldAccess *anIdent;
+
+	    anIdent= new JCFieldAccess();
+	    anIdent->setName($1);
+	    anIdent->bindInLocalSpace(thePackage->getBottomNameSpace());
+	    result->setTriggers(anIdent);
+	  }
+	 else {
+	    JCVarAccess *anIdent;
+	    anIdent= new JCVarAccess();
+	    anIdent->setVarName($1);
+	    anIdent->bindInLocalSpace(thePackage->getBottomNameSpace());
+	    result->setTriggers(anIdent);
+	 }
+	result->setSpecialDestination((JCTransition::DestinationModifiers)$3);
+
+	$$= result;
+    }
+    | QualifiedName ':' TransitionDestination
+    {
+	JCTransition *result;
+	result= new JCTransition();
+
+	if ($1->isComposed()) {
+	    JCFieldAccess *anIdent;
+
+	    anIdent= new JCFieldAccess();
+	    anIdent->setName($1);
+	    anIdent->bindInLocalSpace(thePackage->getBottomNameSpace());
+	    result->setTriggers(anIdent);
+	  }
+	 else {
+	    JCVarAccess *anIdent;
+	    anIdent= new JCVarAccess();
+	    anIdent->setVarName($1);
+	    anIdent->bindInLocalSpace(thePackage->getBottomNameSpace());
+	    result->setTriggers(anIdent);
+	 }
+	result->setDestination((JCStateInvokeExpr *)$3);
+	$$= result;
+    }
+    | DEFAULT_KW ':' TransitionDestination
+    {
+	JCTransition *result;
+	result= new JCTransition();
+
+	result->setDestination((JCStateInvokeExpr *)$3);
+	result->setModifiers(JCTransition::tmDefaulter);
+	$$= result;
+    }
+    | DEFAULT_KW ':' BREAK_KW
+    {
+	JCTransition *result;
+	result= new JCTransition();
+
+	result->setSpecialDestination(JCTransition::dmBreak);
+	result->setModifiers(JCTransition::tmDefaulter);
+	$$= result;
+    }
+
+
+TransitionDestination:
+/* ATTN: The push/pop is not yet accepted.
+    DestinationModifier.Opt
+*/
+    Identifier '(' ArgumentList.Opt ')'
+    {
+	JCStateInvokeExpr *result;
+	result= new JCStateInvokeExpr;
+	result->setName($1);
+	result->bindInLocalSpace(thePackage->getBottomNameSpace());
+	result->setArguments($3);
+	$$= result;
+     }
+
+TransitionSkip:
+    PASSBY_KW
+    {
+	$$= JCTransition::dmPassby;	/* TMP */
+    }
+    | CONSUME_KW
+    {
+	$$= JCTransition::dmConsume;	/* TMP */
+    }
+    | BREAK_KW
+    {
+	$$= JCTransition::dmBreak;	/* TMP */
+    }
+
+
+DestinationModifier.Opt:
+	/* Optional. */
+    {
+	$$= 0;	/* TMP */
+    }
+    | PUSH_KW
+    {
+	$$= JCTransition::dmPush;	/* TMP */
+    }
+    | POP_KW
+    {
+	$$= JCTransition::dmPop;	/* TMP */
+    }
+
+TransitionModifiers.Opt:
+	/* Optional. */
+    {
+	$$= 0;
+    }
+    | TransitionModifiers
+    {
+	$$= $1;
+    }
+
+TransitionModifiers:
+    TransitionModifier
+    {
+	$$= $1;
+    }
+    | TransitionModifiers TransitionModifier
+    {
+	$$= $1 | $2;
+    }
+
+TransitionModifier:
+    BLOCKING_KW
+    {
+	$$= JCTransition::tmBlocking;	/* TMP */
+    }
+    | IMMEDIATE_KW
+    {
+	$$= JCTransition::tmImmediate;	/* TMP */
+    }
+    | PARALLEL_KW
+    {
+	$$= JCTransition::tmParallel;	/* TMP */
+    }
+    | IMPLICIT_KW
+    {
+	$$= JCTransition::tmImplicit;	/* TMP */
+    }
+
+NameList:
+    Name
+    {
+	$$= $1;
+    }
+    | NameList ',' Name
+    {
+	$1->link($3);
+	$$= $1;
+    }
+
+
+TimeInfo.Opt:
+    /* Optional. */
+    {
+	$$= NULL;
+    }
+    |  '@' '[' TimeValue ']'
+     {
+	$$= $3;
+     }
+
+TimeValue:
+    LITERAL_TIME
+    {
+	JCCteExpr *constant;
+	constant= new JCCteExpr(JCReferencedType::popInteger);
+	constant->setIntValue($1);
+	$$= (JCExpression *)constant;
+    }
+
+
+/*** Extension SQL-92. ***/
+Receiver.Opt:
+    /* Nothing. */
+    {
+	$$= NULL;
+    }
+  | '(' Expression ')'
+    {
+	$$= $2;
+    }
+
+sql92.ProcedureStatementList:
+    sql92.SingleStatement
+    {
+	$$= new SqlStatementList($1);
+    }
+  | sql92.ProcedureStatementList sql92.SingleStatement
+    {
+	$1->addStatement($2);
+	$$= $1;
+    }
+
+
+sql92.SingleStatement:
+    sql92.ProcedureStatement ';'
+    {
+	$$->consolidate();
+    }
+    | error ';'
+    {
+	$$= new JCSqlStatement;
+	yyerrok;
+    }
+
+sql92.ProcedureStatement:
+    sql92.DataStatement
+    | sql92.TransactionStatement
+/*
+    | sql92.SchemaStatement
+    | sql92.SessionStatement
+    | sql92.diagnosticsStatement
+*/
+
+
+sql92.DataStatement:
+    sql92.OpenStatement
+  | sql92.FetchStatement
+  | sql92.CloseStatement
+  | sql92.SelectStatementSingleRow
+  | sql92.DataChange
+  | sql92.SelectStatementMultipleRow
+
+sql92.TransactionStatement:
+/*
+    sql92.SetTransactionStatement
+  | sql92.SetConstraintsModeStatement
+  | 
+*/
+    sql92.CommitStatement
+  | sql92.RollbackStatement
+
+
+sql92.OpenStatement:
+    OPEN_KW Identifier
+    {
+	$$= new JCSqlOpen($2);
+     }
+
+
+sql92.FetchStatement:
+    FETCH_KW sql92.FetchOrientationOpt Identifier INTO_KW sql92.FetchTargetList
+    {
+	$$= new JCSqlFetch((JCSqlFetchOrientation *)$2, new JCSqlIdentifier($3), (JCSqlTargetList *)$5);
+     }
+
+
+sql92.FetchOrientationOpt:
+    {
+	$$= JCSqlFetchOrientation::getSimpleOrientation(JCSqlConstants::foNatural);
+     }
+     | sql92.FetchOrientation FROM_KW
+    {
+	$$= $1;
+     }
+
+sql92.FetchOrientation:
+    NEXT_KW
+    {
+	$$= JCSqlFetchOrientation::getSimpleOrientation(JCSqlConstants::foNext);
+     }
+  | PRIOR_KW
+    {
+	$$= JCSqlFetchOrientation::getSimpleOrientation(JCSqlConstants::foPrior);
+     }
+  | FIRST_KW
+    {
+	$$= JCSqlFetchOrientation::getSimpleOrientation(JCSqlConstants::foFirst);
+     }
+  | LAST_KW
+    {
+	$$= JCSqlFetchOrientation::getSimpleOrientation(JCSqlConstants::foLast);
+     }
+  | ABSOLUTE_KW sql92.SimpleValueSpec
+    {
+	$$= new JCSqlFetchOrientation(JCSqlConstants::foAbsolute, $2);
+     }
+  | RELATIVE_KW sql92.SimpleValueSpec
+    {
+	$$= new JCSqlFetchOrientation(JCSqlConstants::foRelative, $2);
+     }
+
+
+sql92.SimpleValueSpec:
+    sql92.EmbeddedVarName
+    {
+	$$= new JCSqlEmbedded($1);
+    }
+  | sql92.Literal
+
+
+sql92.FetchTargetList:
+    sql92.SelectTargetList
+
+
+sql92.CloseStatement:
+    CLOSE_KW Identifier
+    {
+	$$= new JCSqlClose($2);
+     }
+
+
+sql92.CommitStatement:
+    COMMIT_KW sql92.Work.Opt
+    {
+	$$= new JCSqlStatement(JCSqlStatement::cCommit);
+     }
+
+
+sql92.RollbackStatement:
+    ROLLBACK_KW sql92.Work.Opt
+    {
+	$$= new JCSqlStatement(JCSqlStatement::cRollback);
+     }
+
+
+sql92.Work.Opt:
+    /* Nothing. */
+  | WORK_KW
+
+
+sql92.DataChange:
+    sql92.DeleteStatementPos
+  | sql92.DeleteStatementSearched
+  | sql92.InsertStatement
+  | sql92.UpdateStatementPos
+  | sql92.UpdateStatementSearched
+
+
+sql92.DeleteStatementPos:
+    DELETE_KW FROM_KW sql92.TableName WHERE_KW CURRENT_KW OF_KW Identifier
+    {
+	/* TODO. */
+	$$= new JCSqlDelete();
+     }
+
+
+sql92.DeleteStatementSearched:
+    DELETE_KW FROM_KW sql92.TableName sql92.WhereClauseOpt
+    {
+	/* TODO. */
+	$$= new JCSqlDelete();
+     }
+
+
+sql92.InsertStatement:
+    INSERT_KW INTO_KW sql92.TableName sql92.InsertColsAndSource
+    {
+	((JCSqlInsert *)$4)->setTableName($3);
+	$$= $4;
+     }
+
+
+sql92.InsertColsAndSource:
+    sql92.InsertColList sql92.QueryExpr
+    {
+	$$= new JCSqlInsert(NULL, $1, $2);
+    }
+  | sql92.QueryExpr
+    {
+	$$= new JCSqlInsert(NULL, NULL, $1);
+    }
+  | DEFAULT_KW VALUES_KW
+    {
+	$$= new JCSqlInsert(NULL, NULL, NULL);
+    }
+
+
+sql92.InsertColList:
+    '(' IdentifierList ')'
+    {
+	$$= $2;
+    }
+
+
+sql92.UpdateStatementPos:
+    UPDATE_KW sql92.TableName SET_KW sql92.SetClauseList WHERE_KW CURRENT_KW OF_KW Identifier
+    {
+	/* TODO. */
+	$$= new JCSqlUpdate();
+    }
+
+
+sql92.UpdateStatementSearched:
+        UPDATE_KW sql92.TableName SET_KW sql92.SetClauseList sql92.WhereClauseOpt
+    {
+	/* TODO. */
+	$$= new JCSqlUpdate();
+     }
+
+
+sql92.SetClauseList:
+    sql92.SetClause
+    {
+	/* TODO. */
+     }
+  | sql92.SetClauseList ',' sql92.SetClause
+    {
+	/* TODO. */
+     }
+
+
+sql92.SetClause:
+    Identifier '=' sql92.UpdateSource
+    {
+	/* TODO. */
+     }
+
+
+sql92.UpdateSource:
+    sql92.ValueExpr
+  | sql92.NullSpec
+  | sql92.DefaultSpec
+
+
+sql92.SelectStatementSingleRow:
+    SELECT_KW  sql92.SetQuantifier  sql92.SelectList   INTO_KW  sql92.SelectTargetList  sql92.TableExpression
+    {
+	JCSqlSelect *selectExpr;
+	selectExpr= new JCSqlSelect((JCSqlSelectList *)$3, (JCSqlTableClause *)$6);
+	if ($2 != JCSqlConstants::noSetQuantifier) {
+	    selectExpr->quantifySelection((JCSqlConstants::SetQuantifier)$2);
+	}
+	$$= new JCSqlSelectStat(selectExpr, (JCSqlTargetList *)$5);
+    }
+
+
+sql92.SelectStatementMultipleRow:
+   sql92.QuerySpec
+   {
+	$$= new JCSqlSelectStat((JCSqlSelect *)$1, NULL);
+   }
+
+
+sql92.SetQuantifier:
+    /* Nothing. */
+    {
+	$$= JCSqlConstants::noSetQuantifier;
+     }
+  | DISTINCT_KW
+    {
+	$$= JCSqlConstants::distinctElements;
+     }
+  | ALL_KW
+    {
+	$$= JCSqlConstants::allElements;
+     }
+
+
+sql92.SelectList:
+    '*'
+    {
+	$$= new JCSqlSelectList();
+	((JCSqlSelectList *)$$)->setStar();
+     }
+  | sql92.SelectSubList
+
+
+
+sql92.SelectSubList:	
+    sql92.SelectSubListElement
+    {
+	$$= new JCSqlSelectList((JCSqlSelectItem *)$1);
+     }
+  | sql92.SelectSubList ',' sql92.SelectSubListElement
+    {
+	((JCSqlSelectList *)$1)->addElement((JCSqlSelectItem *)$3);
+	$$= $1;
+     }
+
+
+sql92.SelectSubListElement:
+    sql92.DerivedColumn
+    {
+	$$= new JCSqlSelectItem($1);
+     }
+  | sql92.TableName '.' '*'
+    {
+	$$= new JCSqlSelectItem($1);
+	((JCSqlSelectItem *)$$)->setStar();
+     }
+
+
+sql92.DerivedColumn:
+    sql92.ValueExpr
+  | sql92.ValueExpr sql92.AsClause
+    {
+	$$= new JCSqlSynonym($1, $2);
+    }
+
+sql92.AsClause:
+    sql92.AsOpt Identifier
+    {
+	$$= new JCSqlIdentifier($2);
+    }
+
+
+sql92.TableName:
+    sql92.QualifiedName
+  | MODULE_KW '.' Identifier
+    {
+	$$= new JCSqlIdentifier($3);
+	$$->setModuleHeader();
+    }
+
+
+sql92.QualifiedName:
+    Identifier
+    {
+	$$= new JCSqlIdentifier($1);
+    }
+  | sql92.QualifiedName '.' Identifier
+    {
+	$1->addComponent($3);
+	$$= $1;
+    }
+
+
+/* MOD-961219 [HD]: Simplified sql92.QualifiedName, and took this one out.
+sql92.SchemaName:			* 487 *
+    Identifier '.' Identifier
+  | Identifier
+*/
+
+
+sql92.ValueExpr:
+    sql92.NumericValueExpr
+  | sql92.StringValueExpr
+/* ATTENTION: A supporter.
+  | sql92.DateTimeValueExpr
+  | sql92.IntervalValueExpr
+*/
+
+sql92.NumericValueExpr:
+    sql92.Term
+  | sql92.NumericValueExpr '+' sql92.Term
+    {
+	$$= new JCSqlOperExpr($1, $3, JCSqlOperExpr::add);
+    }
+  | sql92.NumericValueExpr '-' sql92.Term
+    {
+	$$= new JCSqlOperExpr($1, $3, JCSqlOperExpr::substract);
+    }
+
+
+sql92.Term:
+    sql92.Factor
+  | sql92.Term '*' sql92.Factor
+    {
+	$$= new JCSqlOperExpr($1, $3, JCSqlOperExpr::multiply);
+    }
+  | sql92.Term '/' sql92.Factor
+    {
+	$$= new JCSqlOperExpr($1, $3, JCSqlOperExpr::divide);
+    }
+
+
+sql92.Factor:
+  '+' sql92.NumericPrimary
+    {
+	$$= new JCSqlOperExpr($2, NULL, JCSqlOperExpr::posate);
+    }
+  | '-' sql92.NumericPrimary
+    {
+	$$= new JCSqlOperExpr($2, NULL, JCSqlOperExpr::negate);
+    }
+  | sql92.NumericPrimary
+
+
+sql92.NumericPrimary:
+    sql92.ValueExprPrimary
+  | sql92.NumericValueFunction
+
+
+sql92.ValueExprPrimary:
+    sql92.UnsignedValueSpec
+  | sql92.TableName
+    {
+	$$= new JCSqlColumnExpr($1);
+    }
+  | sql92.SetFunctionSpec
+  | sql92.SubQuery
+/* ATTENTION: A supporter.
+  | sql92.CaseExpr
+*/
+  | '(' sql92.ValueExpr ')'
+    {
+	$$= new JCSqlOperExpr($2, NULL, JCSqlOperExpr::parenthesis);
+    }
+/* ATTENTION: A supporter.
+  | sql92.CastSpec
+*/
+
+sql92.UnsignedValueSpec:
+    sql92.UnsignedLiteral
+  | sql92.GeneralValueSpec
+
+
+sql92.Literal:
+    sql92.SignedNumericLiteral
+  | sql92.GeneralLiteral
+
+sql92.SignedNumericLiteral:
+    '+' sql92.UnsignedNumericLiteral
+    {
+	((JCSqlNumericCte *)$2)->posate();
+	$$= $2;
+    }
+    | '-' sql92.UnsignedNumericLiteral
+    {
+	((JCSqlNumericCte *)$2)->negate();
+	$$= $2;
+    }
+   | sql92.UnsignedNumericLiteral
+
+
+sql92.UnsignedLiteral:
+    sql92.UnsignedNumericLiteral
+  | sql92.GeneralLiteral
+
+
+sql92.UnsignedNumericLiteral:
+    LITERAL_INT
+    {
+	$$= new JCSqlNumericCte((unsigned int)$1);
+    }
+  | LITERAL_FLOAT
+    {
+	$$= new JCSqlNumericCte($1);
+    }
+
+
+sql92.GeneralLiteral:
+    LITERAL_CHAR
+    {
+	$$= new JCSqlCharCte($1);
+	delete $1;
+    }
+/* ATTENTION: A supporter.
+  | sql92.NCharStringLit
+  | sql92.BitStringLit
+  | sql92.HexStringLit
+*/
+
+sql92.GeneralValueSpec:
+  sql92.VariableSpec
+  | USER_KW
+    {
+	$$= JCSqlConstantExpr::getPopularConstant(JCSqlConstantExpr::popUser);
+    }
+  | CURRENT_U_KW
+    {
+	$$= JCSqlConstantExpr::getPopularConstant(JCSqlConstantExpr::popCurrent);
+    }
+  | SESSION_U_KW
+    {
+	$$= JCSqlConstantExpr::getPopularConstant(JCSqlConstantExpr::popSession);
+    }
+  | SYSTEM_U_KW
+    {
+	$$= JCSqlConstantExpr::getPopularConstant(JCSqlConstantExpr::popSystem);
+    }
+  | VALUE_KW
+    {
+	$$= JCSqlConstantExpr::getPopularConstant(JCSqlConstantExpr::popValue);
+    }
+
+
+sql92.VariableSpec:
+    sql92.EmbeddedVarName
+    {
+	$$= new JCSqlEmbedded($1);
+    }
+  | sql92.EmbeddedVarName sql92.IndicatorVar
+    {
+	$$= new JCSqlEmbedded($1, $2);
+    }
+
+
+sql92.EmbeddedVarName:
+    ':' Expression
+    {
+	$$= $2;
+    }
+
+ 
+sql92.IndicatorVar:
+     sql92.EmbeddedVarName
+  | INDICATOR_KW sql92.EmbeddedVarName
+    {
+	$$= $2;
+    }
+
+
+sql92.SetFunctionSpec:
+    COUNT_KW '(' '*' ')'
+    {
+	$$= JCSqlFunction::getBuiltin(JCSqlFunction::countStar);
+    }
+  | sql92.SetFctType '(' sql92.SetQuantifier sql92.ValueExpr ')'
+    {
+	((JCSqlFunction *)$1)->setQuantifier((JCSqlConstants::SetQuantifier)$3);
+	((JCSqlFunction *)$1)->setOperands($4);
+    }
+
+
+sql92.SetFctType:
+    AVG_KW
+    {
+	$$= JCSqlFunction::getBuiltin(JCSqlFunction::avg);
+    }
+  | MAX_KW
+    {
+	$$= JCSqlFunction::getBuiltin(JCSqlFunction::max);
+    }
+  | MIN_KW
+    {
+	$$= JCSqlFunction::getBuiltin(JCSqlFunction::min);
+    }
+  | SUM_KW
+    {
+	$$= JCSqlFunction::getBuiltin(JCSqlFunction::sum);
+    }
+  | COUNT_KW
+    {
+	$$= JCSqlFunction::getBuiltin(JCSqlFunction::count);
+    }
+
+
+sql92.QueryExpr:
+    sql92.NonJoinQueryExpr
+  | sql92.JoinedTable
+  {
+	// TODO.
+  }
+
+
+sql92.NonJoinQueryExpr:
+    sql92.NonJoinQueryTerm
+  | sql92.QueryExpr  UNION_KW  sql92.AllOpt  sql92.CorrespSpecOpt sql92.QueryTerm
+    {
+	// TODO.
+    }
+  | sql92.QueryExpr  EXCEPT_KW  sql92.AllOpt  sql92.CorrespSpecOpt sql92.QueryTerm
+    {
+	// TODO.
+    }
+
+
+sql92.NonJoinQueryTerm:
+    sql92.NonJoinQueryPrimary
+  | sql92.QueryTerm INTERSECT_KW sql92.AllOpt sql92.CorrespSpecOpt sql92.QueryPrimary
+    {
+	// TODO.
+    }
+
+
+sql92.CorrespSpecOpt:
+  | sql92.CorrespSpec
+
+
+sql92.NonJoinQueryPrimary:
+    sql92.SimpleTable
+  | '(' sql92.NonJoinQueryExpr ')'
+  {
+	$$= new JCSqlOperExpr($2, NULL, JCSqlOperExpr::parenthesis);
+  }
+
+
+sql92.SimpleTable:
+    sql92.QuerySpec
+  | sql92.TableValueConstr
+  | sql92.ExplicitTable
+
+
+sql92.QuerySpec:
+    SELECT_KW sql92.SetQuantifier sql92.SelectList sql92.TableExpression
+    {
+	JCSqlSelect *selectExpr;
+
+	selectExpr= new JCSqlSelect((JCSqlSelectList *)$3, (JCSqlTableClause *)$4);
+	if ($2 != JCSqlConstants::noSetQuantifier) {
+	    selectExpr->quantifySelection((JCSqlConstants::SetQuantifier)$2);
+	}
+	$$= selectExpr;
+    }
+
+
+sql92.SubQuery:
+    '(' sql92.QueryExpr ')'
+    {
+	$$= new JCSqlOperExpr($2, NULL, JCSqlOperExpr::parenthesis);
+    }
+
+
+sql92.TableValueConstr:
+    VALUES_KW sql92.TableValueConstrList
+    {
+	$$= new JCSqlContainerExpr($2, JCSqlContainerExpr::values);
+    }
+
+
+sql92.TableValueConstrList:
+    sql92.RowValueConstr
+    {
+	$$= new JCSqlRowValueList(new JCSqlRowValue($1));
+    }
+  | sql92.TableValueConstrList ',' sql92.RowValueConstr
+    {
+	((JCSqlRowValueList *)$1)->addElement(new JCSqlRowValue($3));
+	$$= $1;
+    }
+
+
+sql92.ExplicitTable:
+    TABLE_KW sql92.TableName
+    {
+	$$= new JCSqlContainerExpr($2, JCSqlContainerExpr::table);
+    }
+
+
+sql92.QueryTerm:
+    sql92.NonJoinQueryTerm
+    {
+    }
+  | sql92.JoinedTable
+    {
+    }
+
+
+sql92.QueryPrimary:
+    sql92.NonJoinQueryPrimary
+    {
+    }
+  | sql92.JoinedTable
+    {
+    }
+
+
+sql92.JoinedTable:
+    sql92.CrossJoin
+    {
+	// TODO.
+    }
+  | sql92.QualifiedJoin
+    {
+	// TODO.
+    }
+  | '(' sql92.JoinedTable ')'
+    { $$= NULL; /* TMPFIX. */ }
+
+
+sql92.CrossJoin:
+     sql92.TableReference CROSS_KW JOIN_KW sql92.TableReference
+     {
+	// TODO.
+     }
+ 
+/* ATTN-970802 [HD]: This rule is incorrect, sql92.NaturalSpec should be sql92.NaturalOpt.
+* But the right rule creates 18 r/r conflicts (JoinSpecOpt seems to be the place to fix).
+*/
+sql92.QualifiedJoin:
+     sql92.TableReference sql92.NatAndJoinType.Opt
+	    JOIN_KW sql92.TableReference sql92.JoinSpec.Opt
+     {
+	// TODO.
+     }
+
+sql92.NatAndJoinType.Opt:
+    /* Nothing. */
+    | NATURAL_KW
+    | NATURAL_KW sql92.JoinType
+    | sql92.JoinType
+
+sql92.JoinType:
+    INNER_KW
+  | sql92.OuterJoinType
+  | sql92.OuterJoinType OUTER_KW
+  | UNION_KW
+
+sql92.OuterJoinType:
+    LEFT_KW
+  | RIGHT_KW
+  | FULL_KW
+
+sql92.JoinSpec.Opt:
+  | sql92.JoinSpec
+
+
+sql92.JoinSpec:
+    sql92.JoinCond
+  | sql92.NamedColumnJoin
+    {
+	// TODO.
+    }
+
+sql92.JoinCond:
+    ON_KW sql92.SearchCond
+
+
+sql92.NamedColumnJoin:
+    USING_KW '(' IdentifierList ')'
+    {
+	$$= $3;
+    }
+
+
+sql92.TableReference:
+    sql92.TableName
+    {
+	$$= new JCSqlTableRef($1);
+    }
+  | sql92.TableName sql92.TableReferenceEndPart
+    {
+	((JCSqlTableRef *)$2)->setSource($1);
+	$$= $2;
+    }
+  | sql92.SubQuery sql92.TableReferenceEndPart
+    {
+	((JCSqlTableRef *)$2)->setSource($1);
+	$$= $2;
+    }
+  | sql92.JoinedTable
+    {
+	$$= new JCSqlTableRef($1);
+    }
+
+sql92.TableReferenceEndPart:
+    sql92.AsOpt Identifier
+    {
+	$$= new JCSqlTableRef($2);
+    }
+  | sql92.AsOpt Identifier '(' IdentifierList ')'
+    {
+	$$= new JCSqlTableRef($2);
+	((JCSqlTableRef *)$$)->setDerivedColumns($4);
+    }
+
+
+sql92.TableExpression:
+     sql92.FromClause    sql92.WhereClauseOpt    sql92.GroupByClauseOpt 
+	    sql92.OrderByOpt    sql92.HavingClauseOpt
+     {
+	$$= new JCSqlTableClause((JCSqlTableRefList *)$1, $2, (JCSqlGroupList *)$3, (JCSqlSortList *)$4, $5);
+     }
+
+
+sql92.FromClause:
+    /* Nothing */
+    {
+	$$= NULL;
+    }
+  | FROM_KW sql92.TableReferenceList
+    {
+	$$= $2;
+    }
+
+sql92.TableReferenceList:
+    sql92.TableReference
+    {
+	$$= new JCSqlTableRefList((JCSqlTableRef *)$1);
+    }
+  | sql92.TableReferenceList ',' sql92.TableReference
+    {
+	((JCSqlTableRefList *)$1)->addElement((JCSqlTableRef *)$3);
+	$$= $1;
+    }
+
+
+sql92.WhereClauseOpt:
+    {
+	$$= NULL;
+    }
+  |  sql92.WhereClause
+
+
+sql92.WhereClause:
+    WHERE_KW  sql92.SearchCond
+    {
+	$$= $2;
+    }
+
+sql92.OrderByOpt:
+    /* Nothing. */
+    {
+	$$= NULL;
+    }
+  | ORDER_KW BY_KW sql92.SortList
+    {
+	$$= $3;
+    }
+    
+
+sql92.SortList:
+    sql92.SortItem
+    {    
+	$$= new JCSqlSortList((JCSqlSortItem *)$1);
+    }
+    | sql92.SortList ',' sql92.SortItem
+    {    
+	((JCSqlSortList *)$1)->addElement((JCSqlSortItem *)$3);
+	$$= $1;
+    }
+
+
+sql92.SortItem:
+    Identifier sql92.CollateClauseOpt sql92.SortDirectionOpt
+    {    
+	$$= new JCSqlSortItem(new JCSqlIdentifier($1), $2, (JCSqlConstants::SortOrder)$3);
+    }
+
+
+sql92.CollateClauseOpt:
+    /* Nothing. */
+    {    
+	$$= NULL;
+    }
+    | sql92.CollateClause
+
+
+sql92.SortDirectionOpt:
+    /* Nothing. */
+    {    
+	$$= 0;
+    }
+    | sql92.SortDirection
+
+sql92.SortDirection:
+    ASC_KW
+    {
+	$$= JCSqlConstants::ascending;
+    }
+  | DESC_KW
+    {
+	$$= JCSqlConstants::descending;
+    }
+
+
+sql92.GroupByClauseOpt:
+    /* Nothing. */
+    {
+	$$= NULL;
+    }
+  | sql92.GroupByClause
+
+
+sql92.GroupByClause:
+    GROUP_KW BY_KW sql92.GroupingColumnRefList
+    {
+	$$= $3;
+    }
+
+
+sql92.GroupingColumnRefList:
+    sql92.GroupingColumnRef
+    {    
+	$$= new JCSqlGroupList((JCSqlGroupItem *)$1);
+    }
+  | sql92.GroupingColumnRefList ',' sql92.GroupingColumnRef
+    {    
+	((JCSqlGroupList *)$1)->addElement((JCSqlGroupItem *)$3);
+	$$= $1;
+    }
+
+
+sql92.GroupingColumnRef:
+    sql92.TableName
+    {    
+	$$= new JCSqlGroupItem($1);
+    }
+  | sql92.TableName sql92.CollateClause
+    {    
+	$$= new JCSqlGroupItem($1, $2);
+    }
+
+
+sql92.CollateClause:
+    COLLATE_KW sql92.QualifiedName
+    {    
+	$$= $2;
+    }
+
+
+sql92.HavingClauseOpt:
+    /* Nothing. */
+    {
+	$$= NULL;
+    }
+  | sql92.HavingClause
+
+sql92.HavingClause:
+     HAVING_KW sql92.SearchCond
+    {
+	$$= $2;
+    }
+
+
+sql92.SearchCond:
+    sql92.BooleanTerm
+  | sql92.SearchCond OR_KW sql92.BooleanTerm
+    {
+	$$= new JCSqlOperExpr($1, $3, JCSqlOperExpr::orOp);
+    }
+
+
+sql92.BooleanTerm:
+    sql92.BooleanFactor
+  | sql92.BooleanTerm AND_KW sql92.BooleanFactor
+    {
+	$$= new JCSqlOperExpr($1, $3, JCSqlOperExpr::andOp);
+    }
+
+
+sql92.BooleanFactor:
+/*    NotOpt BooleanTest */
+    NOT_KW sql92.BooleanTest
+    {
+	$$= new JCSqlOperExpr($2, NULL, JCSqlOperExpr::notOp);
+    }
+  | sql92.BooleanTest
+
+
+sql92.BooleanTest:
+    sql92.BooleanPrimary
+  | sql92.BooleanPrimary IS_KW sql92.NotOpt sql92.TruthValue
+    {
+	$$= new JCSqlOperExpr($1, new JCSqlBoolCte((JCSqlConstants::TruthValues)$4), (($3 == JCSqlOperExpr::notOp) ? JCSqlOperExpr::isnot : JCSqlOperExpr::is));
+    }
+
+
+sql92.BooleanPrimary:
+    sql92.Predicate
+  | '(' sql92.SearchCond ')'
+    {
+	$$= new JCSqlOperExpr($2, NULL, JCSqlOperExpr::parenthesis);
+    }
+
+
+sql92.Predicate:
+    sql92.ComparePred
+  | sql92.BetweenPred
+  | sql92.InPred
+  | sql92.LikePred
+  | sql92.NullPred
+  | sql92.QuantifiedCompPred
+  | sql92.ExistsPred
+  | sql92.UniquePred
+  | sql92.MatchPred
+  | sql92.OverlapsPred
+
+
+sql92.ComparePred:
+    sql92.RowValueConstr sql92.CompOp sql92.RowValueConstr
+    {
+	$$= new JCSqlOperExpr($1, $3, (JCSqlOperExpr::Operators)$2);
+    }
+
+
+sql92.BetweenPred:
+     sql92.RowValueConstr sql92.NotOpt BETWEEN_KW sql92.RowValueConstr AND_KW sql92.RowValueConstr
+    {
+	JCSqlOperExpr *rangeExpr= new JCSqlOperExpr($4, $6, JCSqlOperExpr::andOp);
+	$$= new JCSqlOperExpr($1, rangeExpr, (($2 == JCSqlOperExpr::notOp) ? JCSqlOperExpr::notBetween : JCSqlOperExpr::between));
+    }
+
+
+sql92.InPred:
+   sql92.RowValueConstr sql92.NotOpt IN_KW sql92.InPredValue
+    {
+	$$= new JCSqlOperExpr($1, $4, (($2 == JCSqlOperExpr::notOp) ? JCSqlOperExpr::notIn : JCSqlOperExpr::in));
+    }
+
+
+sql92.InPredValue:
+    sql92.SubQuery
+  | '(' sql92.InValueList ')'
+    {
+	$$= new JCSqlListExpr((JCSqlValueList *)$2);
+    }
+
+
+sql92.InValueList:
+    sql92.ValueExpr
+    {
+	$$= new JCSqlValueList($1)
+    }
+  | sql92.InValueList ',' sql92.ValueExpr
+    {
+	((JCSqlValueList *)$1)->addElement($3);
+	$$= $1;
+    }
+
+
+sql92.LikePred:
+    sql92.CharValueExpr sql92.NotOpt LIKE_KW sql92.CharValueExpr
+    {
+	$$= new JCSqlOperExpr($1, $4, (($2 == JCSqlOperExpr::notOp) ? JCSqlOperExpr::notLike : JCSqlOperExpr::like));
+    }
+  | sql92.CharValueExpr sql92.NotOpt LIKE_KW sql92.CharValueExpr ESCAPE_KW sql92.CharValueExpr
+    {
+	JCSqlOperExpr *escapeExpr= new JCSqlOperExpr($4, $6, JCSqlOperExpr::escape);
+	$$= new JCSqlOperExpr($1, escapeExpr, (($2 == JCSqlOperExpr::notOp) ? JCSqlOperExpr::notLike : JCSqlOperExpr::like));
+    }
+
+
+sql92.NullPred:
+    sql92.RowValueConstr IS_KW sql92.NotOpt NULL_KW
+    {
+	JCSqlConstantExpr *nullConstant= JCSqlConstantExpr::getPopularConstant(JCSqlConstantExpr::popNullCte);
+	$$= new JCSqlOperExpr($1, nullConstant, (($3 == JCSqlOperExpr::notOp) ? JCSqlOperExpr::isnot : JCSqlOperExpr::is));
+    }
+
+
+sql92.QuantifiedCompPred:
+     sql92.RowValueConstr sql92.CompOp sql92.Quantifier sql92.SubQuery
+    {
+	$$= new JCSqlOperExpr($1, $4, JCSqlOperExpr::mergeSetOperators((JCSqlOperExpr::Operators)$2, (JCSqlConstants::SetQuantifier)$3));
+    }
+
+
+sql92.ExistsPred:
+    EXISTS_KW sql92.SubQuery
+    {
+	$$= new JCSqlOperExpr($2, NULL, JCSqlOperExpr::exists);
+    }
+
+
+sql92.UniquePred:
+    UNIQUE_KW sql92.SubQuery
+    {
+	$$= new JCSqlOperExpr($2, NULL, JCSqlOperExpr::unique);
+    }
+
+
+sql92.MatchPred:
+    sql92.RowValueConstr MATCH_KW sql92.MatchModeOpt sql92.SubQuery
+    {
+	$$= new JCSqlOperExpr($1, $4, (JCSqlOperExpr::Operators)$3);
+    }
+
+
+sql92.OverlapsPred:
+   sql92.RowValueConstr OVERLAPS_KW sql92.RowValueConstr
+    {
+	$$= new JCSqlOperExpr($1, $3, JCSqlOperExpr::overlaps);
+    }
+
+
+sql92.CompOp:
+    '='
+    {
+	$$= JCSqlOperExpr::equal;
+    }
+  | NE_KW
+     {
+	$$= JCSqlOperExpr::notEqual;
+    }
+ | '<'
+    {
+	$$= JCSqlOperExpr::lt;
+    }
+  | '>'
+    {
+	$$= JCSqlOperExpr::gt;
+    }
+  | LE_KW
+    {
+	$$= JCSqlOperExpr::le;
+    }
+  | GE_KW
+    {
+	$$= JCSqlOperExpr::ge;
+    }
+
+
+sql92.MatchModeOpt:
+    sql92.UniqueOpt sql92.FullOpt
+    {
+	$$= JCSqlOperExpr::mergeSetOperators((JCSqlOperExpr::Operators)$1, (JCSqlConstants::SetQuantifier)$2);
+     }
+
+sql92.UniqueOpt:
+    /* empty */
+    {
+	$$=  JCSqlOperExpr::match;
+    }
+  | UNIQUE_KW
+    {
+	$$=  JCSqlOperExpr::matchUnique;
+    }
+
+sql92.FullOpt:
+    /* empty */
+    {
+	$$= 0;
+    }
+  | PARTIAL_KW
+    {
+	$$=  JCSqlOperExpr::matchPartial;
+    }
+  | FULL_KW
+    {
+	$$=  JCSqlOperExpr::matchFull;
+    }
+
+
+sql92.Quantifier:
+    ALL_KW
+    {
+	$$= JCSqlConstants::allElements;
+    }
+  | SOME_KW
+    {
+	$$= JCSqlConstants::some;
+    }
+  | ANY_KW
+    {
+	$$= JCSqlConstants::any;
+    }
+
+
+sql92.AllOpt:
+    {
+	$$= 0;
+    }
+  | ALL_KW
+    {
+	$$= JCSqlConstants::allElements;
+    }
+
+
+sql92.TruthValue:
+    TRUE_KW
+    {
+	$$= JCSqlConstants::tvTrue;
+    }
+  | FALSE_KW
+    {
+	$$= JCSqlConstants::tvFalse;
+    }
+  | UNKNOWN_KW
+    {
+	$$= JCSqlConstants::tvUnknown;
+    }
+
+
+sql92.RowValueConstr:
+    sql92.RowValueConstrEle
+  | '(' sql92.RowValueConstrList ')'
+    {
+	$$= new JCSqlListExpr($2);
+    }
+/* MOD-961219 [HD]: Not necessary, sql92.ValueExpr covers this case.
+  | sql92.SubQuery
+*/
+
+
+/* ATTN-970802 [HD]: This is the same as 'UpdateSource'. Can it be merged into one nonterm. ? */
+sql92.RowValueConstrEle:
+    sql92.ValueExpr
+  | sql92.NullSpec
+  | sql92.DefaultSpec
+
+
+sql92.NullSpec:
+    NULL_KW
+    {
+	$$= JCSqlConstantExpr::getPopularConstant(JCSqlConstantExpr::popNullCte);
+    }
+
+
+sql92.DefaultSpec:
+    DEFAULT_KW
+    {
+	$$= JCSqlConstantExpr::getPopularConstant(JCSqlConstantExpr::popDefaultCte);
+    }
+
+
+sql92.RowValueConstrList:
+    sql92.RowValueConstrEle
+    {    
+	$$= new JCSqlRVConstrList(new JCSqlRowValue($1));
+    }
+  | sql92.RowValueConstrList ',' sql92.RowValueConstrEle
+    {    
+	((JCSqlRVConstrList *)$1)->addElement(new JCSqlRowValue($3));
+	$$= $1;
+    }
+
+
+sql92.SelectTargetList:
+    sql92.VariableSpec
+    {
+	$$= new JCSqlTargetList((JCSqlEmbedded *)$1);
+    }
+  | sql92.SelectTargetList ',' sql92.VariableSpec
+    {
+	((JCSqlTargetList *)$1)->addElement((JCSqlEmbedded *)$3);
+	$$= $1;
+    }
+
+
+sql92.AsOpt:
+    /* Nothing. */
+  | AS_KW
+
+
+sql92.NotOpt:
+    {
+	$$= 0;
+    }
+  | NOT_KW
+    {
+	$$= JCSqlOperExpr::notOp;
+    }
+
+
+sql92.CorrespSpec:
+    CORRESPONDING_KW
+    {    
+	// TODO.
+    }
+  | CORRESPONDING_KW BY_KW '(' IdentifierList ')'
+    {    
+	// TODO.
+    }
+
+
+IdentifierList:
+    Identifier
+    {
+	$$= new JCSqlIdentList(new JCSqlIdentifier($1));
+    }
+    | IdentifierList ',' Identifier
+    {
+	((JCSqlIdentList *)$1)->addElement(new JCSqlIdentifier($3));
+	$$= $1;
+    }
+
+
+/**** ATTENTION: Definitions temporaires. *****/ 
+
+sql92.StringValueExpr:
+    '1'
+    {
+	$$= new JCSqlConstantExpr();		// TMPTMP !
+    }
+
+sql92.NumericValueFunction:
+    '2'
+    {
+	$$= new JCSqlConstantExpr();		// TMPTMP !
+    }
+
+
+sql92.CharValueExpr:
+    'a'
+    {
+	$$= new JCSqlConstantExpr();		// TMPTMP !
+    }
+
+
+
+%%
+
+/* --------------- Fin de la grammaire --------------- */
+

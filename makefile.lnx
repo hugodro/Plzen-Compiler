@@ -1,0 +1,29 @@
+# Makefile, PlZen Compiler.
+
+PROJECT= PlzCompiler
+
+include $(MIDFRHOME)/MakeInc/geneMake.lnx
+
+subdirs= Core Spec
+
+all: $(subdirs)
+
+.PHONY: $(subdirs)
+
+Core:
+	cd $@ && $(MAKE)
+
+Spec:
+	cd $@ && $(MAKE)
+
+.PHONY: clean
+clean:
+	@for i in $(subdirs); do ( \
+		cd $$i && $(MAKE) clean \
+	) \
+	 || exit 1; done
+
+
+bin:
+	cd Core && $(MAKE) bin
+

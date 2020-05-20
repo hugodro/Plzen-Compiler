@@ -1,0 +1,16 @@
+#
+PROJECT+= PlCmpSpec
+
+include $(MIDFRHOME)/MakeInc/geneMake.lnx
+
+all: nothing
+
+nothing:
+	@echo "Nothing to do."
+
+clean: 
+	( cd $(OBJ_PATH) && \
+	  rm *.o $(PRODUCTS) \
+	)
+
+

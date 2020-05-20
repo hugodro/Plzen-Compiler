@@ -1,0 +1,113 @@
+#/************************************************
+#* File: makefile.
+#* Desc: Building definitions for the Java Compiler.
+#************************************************/
+
+PROJECT= Compiler
+ARCHITECTURE= ns_i386
+SHORTOBJPATH= objs/$(ARCHITECTURE)
+ARCHPATH= $(SHORTOBJPATH)
+VPATH=$(SHORTOBJPATH)
+
+#ARCHPATH= $(PLZENHOME)/bins/$(ARCHITECTURE)/$(PROJECT)
+#VPATH= ../objs_next
+
+# Plzen level 1 is implied (Java).
+# level 2 is FSM.
+# level 3 is SQL.
+# level 2_2 is Real-Time (needs 2 to work).
+PLZEN_LEVELS= -DPLZEN_LEVEL_2 -DPLZEN_LEVEL_3
+
+PLZ_1_SRCS= jvgram.cpp jvgram.ycc jvtokens.l jvtokens.c
+PLZ_2_SRCS= extGram.cpp extGram.ycc extTokens.cpp extTokens.lcc
+PLZ_3_SRCS= sqlActions.cpp sqlExpressions.cpp sqlClauses.cpp sqlIdentifier.cpp \
+	sqlSpitters.cpp sqlCompContext.cpp
+
+PLZ_1_OBJS= jvgram.o jvtokens.o
+PLZ_2_OBJS= extGram.o extTokens.o
+PLZ_3_OBJS= sqlActions.o sqlExpressions.o sqlClauses.o sqlIdentifier.o \
+	sqlSpitters.o sqlCompContext.o
+
+#VARSRCS= $(PLZ_1_SRCS)
+#VAROBJS= $(PLZ_1_OBJS)
+VARSRCS= $(PLZ_2_SRCS) $(PLZ_3_SRCS)
+VAROBJS= $(PLZ_2_OBJS) $(PLZ_3_OBJS)
+
+
+
+EXTERNOBJS= $(PLZENHOME)/bins/$(ARCHITECTURE)/RunTime/filePath.o \
+	$(PLZENHOME)/bins/$(ARCHITECTURE)/RunTime/classFileObject.o \
+	$(PLZENHOME)/bins/$(ARCHITECTURE)/RunTime/zipStream.o
+
+SRCS= $(VARSRCS) plzenc.cpp lexhelp.cpp \
+	package.cpp typing.cpp variables.cpp identifiers.cpp \
+	actions.cpp expressions.cpp compileObjects.cpp \
+	compiler.cpp sourceFile.cpp strUtils.c \
+	nameSpace.cpp lists.cpp \
+	outClassFile.cpp outConstant.cpp attributes.cpp \
+	compContext.cpp instructions.cpp \
+	opcode.cpp codeBuffer.cpp \
+	labelStack.cpp spitters.cpp \
+	classSource.cpp importClass.cpp \
+	classFile.cpp inConstant.cpp \
+	inAttributes.cpp importedObjects.cpp \
+	importManager.cpp compOptions.cpp \
+	hashManager.cpp hashBucket.cpp hashElement.cpp \
+	containment.cpp overloadDict.cpp
+
+
+OBJS= $(VAROBJS) plzenc.o lexhelp.o \
+	package.o typing.o variables.o identifiers.o \
+	actions.o expressions.o compileObjects.o \
+	compiler.o sourceFile.o strUtils.o \
+	nameSpace.o lists.o \
+	outClassFile.o outConstant.o attributes.o \
+	compContext.o instructions.o \
+	opcode.o codeBuffer.o \
+	labelStack.o spitters.o \
+	classSource.o importClass.o \
+	classFile.o inConstant.o \
+	inAttributes.o importedObjects.o \
+	importManager.o compOptions.o \
+	hashManager.o hashBucket.o hashElement.o \
+	containment.o overloadDict.o
+
+
+TESTOBJS= test.o runClass.o
+
+
+INC= -I$(PLZENHOME)/include
+LIBS= -liostream
+
+CC= cc
+# Flags for compilation: -pg (gprof).
+CFLAGS= -g -DDEBUG_NS $(PLZEN_LEVELS)
+YACC= bison
+YACCFLAGS= -dyv
+LEX= flex
+LEXFLAGS=
+
+.SUFFIXES: .cpp .lcc
+all: pz
+
+pz: $(OBJS)
+	$(CC)  $(CFLAGS) -o $@ $(OBJS) $(EXTERNOBJS) $(LIBS)
+
+testCF: $(TESTOBJS)
+	$(CC) $(INC) $(CFLAGS) -o testCF $(TESTOBJS) $(LIBS)
+
+.c.o:
+	$(CC) $(INC) $(CFLAGS) -o $(ARCHPATH)/$@ -c  $<
+
+.cpp.o:
+	$(CC) $(INC) $(CFLAGS) -o $(ARCHPATH)/$@ -c  $<
+
+
+extGram.cpp: extGram.ycc
+	$(YACC) $(YACCFLAGS) extGram.ycc
+	mv y.tab.c $@
+
+extTokens.cpp: extTokens.lcc
+	$(LEX) $(LEXFLAGS) -o$@ extTokens.lcc
+
+#	mv lex.yy.c $@
